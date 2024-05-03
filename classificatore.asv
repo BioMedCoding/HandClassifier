@@ -9,6 +9,17 @@ clc
 
 %% Impostazioni script e inizializzazione
 
+% ======================== Parametri filtraggio ===========================
+tipo_filtro = "cheby2";
+f_sample = 2000;                                    % Frequenza campionamento
+f_taglio_basso = 20;                                % Frequenza minima del passabanda
+f_taglio_alta = 400;                                % Frequenza massima del passabanda
+f_notch = 50;                                       % Frequenza del notch
+f_envelope = 4;                                     % Frequenza inviluppo
+percH = 1.3;                                        % Percentuale frequenza alta
+visualisation = "no";                               % Mostra grafici filtraggio
+% =========================================================================
+
 
 % ======================== Parametri generali script ======================
 mostra_grafici = true;                              % Mostra grafici prodotti durante il codice
@@ -23,25 +34,11 @@ caricamento_modelli = true;                         % Carica modelli già salvat
 salva_modelli = false;                               % Salva o meno i modelli allenati                           
 percorso_salvataggio = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati"; % Percorso dove salvare i modelli
 valuta_validation = false;                           % Esegui valutazione dei vari modelli sul validation set
-valuta_training_completo = true;                    % Esegui valutazione dei vari modelli sul training set completo
-valuta_test = false;                                 % Esegui valutazione dei vari modelli sul test set
+valuta_training_completo = false;                    % Esegui valutazione dei vari modelli sul training set completo
+valuta_test = true;                                 % Esegui valutazione dei vari modelli sul test set
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 applica_postprocess = false;
 % =========================================================================
-
-
-
-% ======================== Parametri filtraggio ===========================
-tipo_filtro = "cheby2";
-f_sample = 2000;                                    % Frequenza campionamento
-f_taglio_basso = 20;                                % Frequenza minima del passabanda
-f_taglio_alta = 400;                                % Frequenza massima del passabanda
-f_notch = 50;                                       % Frequenza del notch
-f_envelope = 4;                                     % Frequenza inviluppo
-percH = 1.3;                                        % Percentuale frequenza alta
-visualisation = "no";                               % Mostra grafici filtraggio
-% =========================================================================
-
 
 
 %  ========================Parametri addestramento SVM ====================
@@ -813,7 +810,7 @@ if valuta_test
         
         subplot(2,1,2);
         plot(label_test);
-        title('Ground truth');
+        title('Ground truth e predizioni');
         xlabel('Campioni');
         ylabel('[a.u.]');
         
@@ -847,7 +844,7 @@ if valuta_test
         
         subplot(4,1,4);
         plot(label_test);
-        title('Ground truth');
+        title('Ground truth e predizioni');
         xlabel('Campioni');
         ylabel('[a.u.]');
         
@@ -1112,7 +1109,7 @@ if valuta_training_completo
         
         subplot(2,1,2);
         plot(label);
-        title('Ground truth');
+        title('Ground truth e predizioni');
         xlabel('Campioni');
         ylabel('[a.u.]');
         
@@ -1123,7 +1120,7 @@ end
 
 %% Rappresentazione complessiva training test completo
 
-if valuta_training_completo
+if valuta_test
     if mostra_grafici
         figure;
         subplot(4,1,1);
@@ -1145,7 +1142,7 @@ if valuta_training_completo
         ylabel('[a.u.]');
         
         subplot(4,1,4);
-        plot(label);
+        plot(label_test);
         title('Ground truth');
         xlabel('Campioni');
         ylabel('[a.u.]');
