@@ -3,12 +3,13 @@ clear
 close all
 clc
 
-
 %% Impostazioni script e inizializzazione
 
-
 % ======================== Parametri generali script ======================
-mostra_grafici = true;                              % Mostra grafici prodotti durante il codice
+mostra_grafici_segnali = false;                      % Mostra grafici relativi ai segnali pre-classificazione
+mostra_cm = true;                                   % Mostra le CM dei vari classificatori
+mostra_risultati_singoli = false;                   % Mostra confronto singolo classificatore - Ground Truth
+mostra_risultati_complessivi = true;                 % Mostra confronto tutti i classificatori - Ground Truth
 valore_apertura = 1;                                % Valore label apertura
 valore_chiusura = 2;                                % Valore label chiusura
 classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
@@ -22,14 +23,14 @@ caricamento_modelli = true;                         % Carica modelli già salvat
 salva_modelli = false;                               % Salva o meno i modelli allenati                           
 percorso_salvataggio = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati"; % Percorso dove salvare i modelli
 
-valuta_validation = true;                           % Esegui valutazione dei vari modelli sul validation set
-valuta_training_completo = false;                    % Esegui valutazione dei vari modelli sul training set completo
-valuta_test = false;                                 % Esegui valutazione dei vari modelli sul test set
+valuta_validation = false;                           % Esegui valutazione dei vari modelli sul validation set
+valuta_training_completo = true;                    % Esegui valutazione dei vari modelli sul training set completo
+valuta_test = true;                                 % Esegui valutazione dei vari modelli sul test set
 
-prediction_parallel = true;                          % Esegui il comando predict usando il parfor (parallel pool)
+prediction_parallel = false;                         % Esegui il comando predict usando il parfor (parallel pool)
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
-applica_postprocess = false;
+applica_postprocess = false;                         % Applica funzionid postprocess sul vettore di classificazione
 % =========================================================================
 
 
@@ -53,6 +54,7 @@ svm_calcolo_GPU = false;                            % Abilita l'addestramento de
 ore_esecuzione_massime = 3;                         % Numero massimo di ora per cui continuare l'hypertuning automatico dei parametri
 
 t_hyper = templateSVM('KernelFunction', 'rbf', 'KernelScale', 'auto');
+
 opts_hyp = struct('AcquisitionFunctionName', 'expected-improvement-plus', ...
     'UseParallel', true, ...
     'MaxObjectiveEvaluations', 30, ... 
@@ -66,36 +68,39 @@ t_single = templateSVM('KernelFunction', 'polynomial', 'PolynomialOrder', 2);
 coding_single = 'onevsall'; % onevsone, onevsall
 % =========================================================================
 
+
+
 %  ========================Parametri addestramento NN =====================
-max_epoche = 300;   
-val_metrica_obiettivo = 0.005;
-train_function = 'trainscg';
+max_epoche = 300;                   % Numero massimo di epoche di allenamento della rete neurale
+val_metrica_obiettivo = 0.005;      % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
+train_function = 'trainscg';        % Funzione di training della rete neurale
 % =========================================================================
+
+
 
 % ======================== Parametri addestramento LDA ====================
 discrimType = 'linear'; % quadratic, diaglinear, diagquadratic, pseudolinear, pseudoquadratic
 % =========================================================================
 
-% Avvio pool se necessario e non attivo
-
+% ================= Avvio pool se necessario e non attivo =================
 if prediction_parallel || svm_parameter_hypertuning
     if isempty(gcp('nocreate'))
             parpool('local', numero_worker); % Avvia in modalità processes
-            %parpool('Threads')
+            %parpool('Threads')              % Avvia in modalità thread
     end
 end
-
+% =========================================================================
 
 %% Import segnali
 
 % Import segnali aperture
 sig = readtable('Data\aperture.txt',"Delimiter", '\t');
-t_hyp = sig(:,1);
+%t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
 sig(:,1) = [];
 sig_aperture = table2array(sig);
 % Import segnali chiusura
 sig = readtable('Data\chiusure.txt',"Delimiter", '\t');
-t_hyp = sig(:,1);
+t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
 sig(:,1) = [];
 sig_chiusura = table2array(sig);
 
@@ -121,7 +126,7 @@ for i=1:n_channel
     envelope(:,i) = filter_general(abs(sig_filt(:,i)),tipo_filtro,f_sample,"fH",f_envelope,"percH",percH);   
 end
 
-if mostra_grafici
+if mostra_grafici_segnali
     figure()
     plot(envelope)
     title('Inviluppo segnale grezzo');
@@ -135,7 +140,7 @@ envelope_std = (envelope-mean(envelope))./std(envelope);
 % Istruzione per usare il segnale senza inviluppo
 %envelope_std = (sig_filt-mean(sig_filt))./std(sig_filt);
 
-if mostra_grafici
+if mostra_grafici_segnali
     figure()
     plot(envelope_std)
     hold on
@@ -162,7 +167,7 @@ end_ind_chiusura = [360648, 376921, 393662, 410653, 426676, 443944, 459423, 4761
 n = end_ind_chiusura(end);  % Lunghezza del vettore label chiusure da creare
 label_chiusura = creaEtichetta(n, start_indices_chiusura, end_ind_chiusura, valore_chiusura);
 
-if mostra_grafici
+if mostra_grafici_segnali
     plot(label_apertura)
     hold on
     plot(label_chiusura)
@@ -179,7 +184,7 @@ label = [label_apertura(1:end_ind_apertura(end)) , label_chiusura(inizio_chiusur
 % Taglio del segnale perché abbia la stessa lunghezza del label
 envelope_std = envelope_std(1:length(label), :);
 
-if mostra_grafici
+if mostra_grafici_segnali
     figure()
     plot(label)
     hold on
@@ -260,7 +265,7 @@ if valuta_validation
 
     metodo = "SVM";
     set = "Validation";
-    [CM_svm_validation, acc_svm_validation, prec_svm_validation, spec_svm_validation, sens_svm_validation, f1_svm_validation] = evaluaClassificatore(label_val, prediction_svm_validation, mostra_grafici, classi, metodo, set); 
+    [CM_svm_validation, acc_svm_validation, prec_svm_validation, spec_svm_validation, sens_svm_validation, f1_svm_validation] = evaluaClassificatore(label_val, prediction_svm_validation, mostra_cm, classi, metodo, set); 
 end
 %pause
 %% LDA - addestramento
@@ -287,9 +292,10 @@ end
 
 if valuta_validation
     prediction_lda_validation = predict(lda_model, sig_val);
+
     metodo = "LDA";
     set = "Validation";
-    [CM_lad_validation, acc_lda_validation, prec_lda_validation, spec_lda_validation, sens_lda_validation, f1_lda_validation] = evaluaClassificatore(label_val, prediction_lda_validation, mostra_grafici, classi, metodo, set); 
+    [CM_lad_validation, acc_lda_validation, prec_lda_validation, spec_lda_validation, sens_lda_validation, f1_lda_validation] = evaluaClassificatore(label_val, prediction_lda_validation, mostra_cm, classi, metodo, set); 
 end
 
 
@@ -302,7 +308,7 @@ end
 %% Rete neurale - addestramento
 
 if allena_rete_neurale
-    % Definizione architettura - chat stupido
+    % Definizione architettura - sistema completo
     % layers = [
     %     sequenceInputLayer(5)
     %     convolution1dLayer(5, 10, 'Padding', 'same')
@@ -371,12 +377,14 @@ if valuta_validation
     prediction_nn_validation = net(sig_val);
     prediction_nn_validation = vec2ind(prediction_nn_validation);  % Converti le probabilità in indici di classe
 
-    % Calcolo confusione matrix
+    % Ripristina label corrette
     label_val = vec2ind(label_val)';
+    label_val = label_val-1;
+    prediction_nn_validation = prediction_nn_validation'-1; % Riporta alle label convenzionali
     
     metodo = "NN";
     set = "Validation";
-    [CM_nn_validation, acc_nn_validation, prec_nn_validation, spec_nn_validation, sens_nn_validation, f1_nn_validation] = evaluaClassificatore(label_val, prediction_nn_validation, mostra_grafici, classi, metodo, set); 
+    [CM_nn_validation, acc_nn_validation, prec_nn_validation, spec_nn_validation, sens_nn_validation, f1_nn_validation] = evaluaClassificatore(label_val, prediction_nn_validation, mostra_cm, classi, metodo, set); 
 
 end
 %% Import dati test set
@@ -407,7 +415,7 @@ if valuta_test
         envelope_test(:,i) = filter_general(abs(sig_filt_test(:,i)),tipo_filtro,f_sample,"fH",f_envelope,"percH",percH);  
     end
     
-    if mostra_grafici
+    if mostra_grafici_segnali
         figure()
         plot(envelope_test)
         title('Inviluppo segnale grezzo');
@@ -421,13 +429,13 @@ if valuta_test
     
     label_test = [label_test; 0];
     
-    if mostra_grafici
+    if mostra_grafici_segnali
         figure()
         plot(envelope_std_test)
         hold on
     end
     
-    if mostra_grafici
+    if mostra_grafici_segnali
         figure()
         plot(label_test)
         hold on
@@ -454,65 +462,15 @@ if valuta_test
     
         % Calcolo confusione matrix
         label_test = vec2ind(label_test)';
-        CM_nn_test = confusionmat(label_test, prediction_nn_test);
-        
-        if mostra_grafici
-                figure()
-                confusionchart(CM_nn_test, classi)
-                title('Confusion Matrix NN - test')
-        end
-
         label_test = label_test-1;
- 
-        %% Rete neurale - calcolo metriche per classe sul TEST
-        numClassi = size(CM_nn_test, 1);
-        
-        % Pre-allocazione memoria
-        precision_nn_test = zeros(numClassi , 1);      % Quanti positivi lo erano davvero tra quelli positivi, TP/(TP+FP)
-        sensibilita_nn_test = zeros(numClassi , 1);    % Quanti positivi effettivi sono stati identificati come tali, TP/(TP+FP)
-        f1Score_nn_test = zeros(numClassi , 1);        % Media armonica di precision e sensibilità, utile quando la frequenza delle classi non è uguale
-        accuretazza_nn_test = zeros(1, 1);             % Previsioni corrette rispetto al totale delle previsioni. Numero di predizioni corrette rispetto al numero totale di casi osservati. (TP + TN) / (TP+TN+FP+FN)
-        specificita_nn_test = zeros(numClassi, 1);     % Quandi negativi effettivi sono stati identificati. TN / (TN+FP)
-        
-        for i=1:numClassi
-            precision_nn_test(i) = CM_nn_test(i,i) / sum(CM_nn_test(:,i));
-            sensibilita_nn_test(i) = CM_nn_test(i,i) / sum(CM_nn_test(i,:));
-        
-            % Punteggio f1 per classe 1
-            if (precision_nn_test(i) + sensibilita_nn_test(i)) == 0
-                f1score_nn_test(i) = 0;
-            else
-                f1Score_nn_test(i) = 2*(precision_nn_test(i)*sensibilita_nn_test(i) / (precision_nn_test(i) + sensibilita_nn_test(i)) );
-            end
-        
-            % Calcolo della specificità per la classe i
-            TN = sum(CM_nn_test(:)) - sum(CM_nn_test(i,:)) - sum(CM_nn_test(:,i)) + CM_nn_test(i,i);
-            FP = sum(CM_nn_test(:,i)) - CM_nn_test(i,i);
-            specificita_nn_test(i) = TN / (TN + FP);
-        end
-        
-        % Calcolo dell'accuratezza complessiva
-        total = sum(CM_nn_test(:));
-        accuratezza_nn_test = sum(diag(CM_nn_test)) / total;
-        
-        % Stampa dell'accuratezza complessiva
-        fprintf('\n---------------------------\n');
-        fprintf('Accuratezza complessiva rete neurale - test: %.2f\n', accuratezza_nn_test*100);
-        
-        
-        % Stampa dell'intestazione delle metriche
-        fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
-        
-        % Stampa delle metriche per ogni classe
-        for i = 1:numClassi
-            fprintf('%-10d %-12.2f %-12.2f %-12.2f %-12.2f\n', i, precision_nn_test(i)*100, specificita_nn_test(i)*100, sensibilita_nn_test(i)*100, f1Score_nn_test(i)*100);
-        end
-            
-        fprintf('\n---------------------------\n');
-  
+        prediction_nn_test = prediction_nn_test'-1; % Riporta alle label convenzionali
+
+        metodo = "NN";
+        set = "Test";
+        [CM_nn_test, acc_nn_test, prec_nn_test, spec_nn_test, sens_nn_test, f1_nn_test] = evaluaClassificatore(label_test, prediction_nn_test, mostra_cm, classi, metodo, set); 
   
 %% NN - rappresentazione dati di test
-    if mostra_grafici
+    if mostra_risultati_singoli
         figure;
         subplot(2,1,1);
         plot(prediction_nn_test);
@@ -536,69 +494,18 @@ if caricamento_modelli
     load('Modelli_allenati\svm_model.mat')
 end
 
-    % Predizione usando intero training+validation set
-    %prediction_complete_svm = predict(svm_model, envelope_std);
-
+    
+%% Predizione usando test set
 if valuta_test
-    % Predizione usando test set
 
-    prediction_test_svm = predict(svm_model, envelope_std_test);
+    prediction_svm_test = predict(svm_model, envelope_std_test);
     
-    CM_svm_test = confusionmat(label_test,prediction_test_svm);
-        
-    if mostra_grafici
-        figure()
-        confusionchart(CM_svm_test, classi)
-        title('Confusion Matrix SVM - test')
-    end
-    
-    %% SVM - calcolo metriche per classe sul TEST SET
-        
-    numClassi = size(CM_svm_test, 1);
-    
-    % Pre-allocazione memoria
-    precision_svm_test = zeros(numClassi , 1);      % Quanti positivi lo erano davvero tra quelli positivi, TP/(TP+FP)
-    sensibilita_svm_test = zeros(numClassi , 1);    % Quanti positivi effettivi sono stati identificati come tali, TP/(TP+FP)
-    f1Score_svm_test = zeros(numClassi , 1);        % Media armonica di precision e sensibilità, utile quando la frequenza delle classi non è uguale
-    accuretazza_svm_test = zeros(1, 1);             % Previsioni corrette rispetto al totale delle previsioni. Numero di predizioni corrette rispetto al numero totale di casi osservati. (TP + TN) / (TP+TN+FP+FN)
-    specificita_svm_test = zeros(numClassi, 1);     % Quandi negativi effettivi sono stati identificati. TN / (TN+FP)
-    
-    for i=1:numClassi
-        precision_svm_test(i) = CM_svm_test(i,i) / sum(CM_svm_test(:,i));
-        sensibilita_svm_test(i) = CM_svm_test(i,i) / sum(CM_svm_test(i,:));
-    
-        % Punteggio f1 per classe 1
-        if (precision_svm_test(i) + sensibilita_svm_test(i)) == 0
-            f1score_svm_test(i) = 0;
-        else
-            f1Score_svm_test(i) = 2*(precision_svm_test(i)*sensibilita_svm_test(i) / (precision_svm_test(i) + sensibilita_svm_test(i)) );
-        end
-    
-        % Calcolo della specificità per la classe i
-        TN = sum(CM_svm_test(:)) - sum(CM_svm_test(i,:)) - sum(CM_svm_test(:,i)) + CM_svm_test(i,i);
-        FP = sum(CM_svm_test(:,i)) - CM_svm_test(i,i);
-        specificita_svm_test(i) = TN / (TN + FP);
-    end
-    
-    % Calcolo dell'accuratezza complessiva
-    total = sum(CM_svm_test(:));
-    accuratezza_svm_test = sum(diag(CM_svm_test)) / total;
-    
-    % Stampa dell'accuratezza complessiva
-    fprintf('\n---------------------------\n');
-    fprintf('Accuratezza complessiva SVM - test: %.2f\n', accuratezza_svm_test*100);
-    
-    
-    % Stampa dell'intestazione delle metriche
-    fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
-    
-    % Stampa delle metriche per ogni classe
-    for i = 1:numClassi
-        fprintf('%-10s %-12.2f %-12.2f %-12.2f %-12.2f\n', char(classi(i)), precision_svm_test(i)*100, specificita_svm_test(i)*100, sensibilita_svm_test(i)*100, f1Score_svm_test(i)*100);
-    end
-    fprintf('\n---------------------------\n');
+    metodo = "SVM";
+    set = "Test";
+    [CM_svm_test, acc_svm_test, prec_svm_test, spec_svm_test, sens_svm_test, f1_svm_test] = evaluaClassificatore(label_test, prediction_svm_test, mostra_cm, classi, metodo, set);
+
     %% SVM - rappresentazione dati di test
-    if mostra_grafici
+    if mostra_risultati_singoli
         figure;
         subplot(2,1,1);
         plot(prediction_test_svm);
@@ -625,66 +532,15 @@ if caricamento_modelli
 end
 
 if valuta_test
-    prediction_test_lda = predict(lda_model, envelope_std_test);
-    CM_lda_test = confusionmat(label_test,prediction_test_lda);
-        
-        if mostra_grafici
-            figure()
-            confusionchart(CM_lda_test, classi)
-            title('Confusion Matrix LDA - test')
-        end
+    prediction_lda_test = predict(lda_model, envelope_std_test);
 
-%% LDA - calcolo metriche per classe sul TEST SET
-    
-    numClassi = size(CM_lda_test, 1);
-    
-    % Pre-allocazione memoria
-    precision_lda_test = zeros(numClassi , 1);      % Quanti positivi lo erano davvero tra quelli positivi, TP/(TP+FP)
-    sensibilita_lda_test = zeros(numClassi , 1);    % Quanti positivi effettivi sono stati identificati come tali, TP/(TP+FP)
-    f1Score_lda_test = zeros(numClassi , 1);        % Media armonica di precision e sensibilità, utile quando la frequenza delle classi non è uguale
-    accuretazza_lda_test = zeros(1, 1);             % Previsioni corrette rispetto al totale delle previsioni. Numero di predizioni corrette rispetto al numero totale di casi osservati. (TP + TN) / (TP+TN+FP+FN)
-    specificita_lda_test = zeros(numClassi, 1);     % Quandi negativi effettivi sono stati identificati. TN / (TN+FP)
-    
-    for i=1:numClassi
-        precision_lda_test(i) = CM_lda_test(i,i) / sum(CM_lda_test(:,i));
-        sensibilita_lda_test(i) = CM_lda_test(i,i) / sum(CM_lda_test(i,:));
-    
-        % Punteggio f1 per classe 1
-        if (precision_lda_test(i) + sensibilita_lda_test(i)) == 0
-            f1score_lda_test(i) = 0;
-        else
-            f1Score_lda_test(i) = 2*(precision_lda_test(i)*sensibilita_lda_test(i) / (precision_lda_test(i) + sensibilita_lda_test(i)) );
-        end
-    
-        % Calcolo della specificità per la classe i
-        TN = sum(CM_lda_test(:)) - sum(CM_lda_test(i,:)) - sum(CM_lda_test(:,i)) + CM_lda_test(i,i);
-        FP = sum(CM_lda_test(:,i)) - CM_lda_test(i,i);
-        specificita_lda_test(i) = TN / (TN + FP);
-    end
-    
-    % Calcolo dell'accuratezza complessiva
-    total = sum(CM_lda_test(:));
-    accuratezza_lda_test = sum(diag(CM_lda_test)) / total;
-    
-    % Stampa dell'accuratezza complessiva
-    fprintf('\n---------------------------\n');
-    fprintf('Accuratezza complessiva LDA - test: %.2f\n', accuratezza_lda_test*100);
-    
-    
-    % Stampa dell'intestazione delle metriche
-    fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
-    
-    % Stampa delle metriche per ogni classe
-    for i = 1:numClassi
-        fprintf('%-10s %-12.2f %-12.2f %-12.2f %-12.2f\n', char(classi(i)), precision_lda_test(i)*100, specificita_lda_test(i)*100, sensibilita_lda_test(i)*100, f1Score_lda_test(i)*100);
-    end
-    
-    fprintf('\n---------------------------\n');
-
+    metodo = "LDA";
+    set = "Test";
+    [CM_lda_test, acc_lda_test, prec_lda_test, spec_lda_test, sens_lda_test, f1_lda_test] = evaluaClassificatore(label_test, prediction_lda_test, mostra_cm, classi, metodo, set);
 
     %% LDA - Rappresentazione dati di test
     
-    if mostra_grafici
+    if mostra_risultati_singoli
         figure;
         subplot(2,1,1);
         plot(prediction_test_lda);
@@ -706,10 +562,10 @@ end
 %% Rappresentazione complessiva test set
 
 if valuta_test
-    if mostra_grafici
+    if mostra_risultati_complessivi
         figure;
         subplot(4,1,1);
-        plot(prediction_test_svm);
+        plot(prediction_svm_test);
         title('Predizioni SVM - test');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -721,7 +577,7 @@ if valuta_test
         ylabel('[a.u.]');
     
         subplot(4,1,3);
-        plot(prediction_test_lda);
+        plot(prediction_lda_test);
         title('Predizioni LDA - test');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -748,63 +604,15 @@ end
 if valuta_training_completo
     % Predizione usando training set complato
 
-    prediction_svm_train_completo = predict(svm_model, envelope_std);
+    prediction_svm_trainC = predict(svm_model, envelope_std);
     
-    CM_svm_train_completo = confusionmat(label,prediction_svm_train_completo);
-        
-    if mostra_grafici
-        figure()
-        confusionchart(CM_svm_train_completo, classi)
-        title('Confusion Matrix SVM - training set completo')
-    end
-    
-    %% SVM - calcolo metriche per classe TRAINING SET COMPLETO
-        
-    numClassi = size(CM_svm_train_completo, 1);
-    
-    % Pre-allocazione memoria
-    precision_svm_train_completo = zeros(numClassi , 1);      % Quanti positivi lo erano davvero tra quelli positivi, TP/(TP+FP)
-    sensibilita_svm_train_completo = zeros(numClassi , 1);    % Quanti positivi effettivi sono stati identificati come tali, TP/(TP+FP)
-    f1Score_svm_train_completo = zeros(numClassi , 1);        % Media armonica di precision e sensibilità, utile quando la frequenza delle classi non è uguale
-    accuretazza_svm_train_completo = zeros(1, 1);             % Previsioni corrette rispetto al totale delle previsioni. Numero di predizioni corrette rispetto al numero totale di casi osservati. (TP + TN) / (TP+TN+FP+FN)
-    specificita_svm_train_completo = zeros(numClassi, 1);     % Quandi negativi effettivi sono stati identificati. TN / (TN+FP)
-    
-    for i=1:numClassi
-        precision_svm_train_completo(i) = CM_svm_train_completo(i,i) / sum(CM_svm_train_completo(:,i));
-        sensibilita_svm_train_completo(i) = CM_svm_train_completo(i,i) / sum(CM_svm_train_completo(i,:));
-    
-        % Punteggio f1 per classe 1
-        if (precision_svm_train_completo(i) + sensibilita_svm_train_completo(i)) == 0
-            f1score_svm_train_completo(i) = 0;
-        else
-            f1Score_svm_train_completo(i) = 2*(precision_svm_train_completo(i)*sensibilita_svm_train_completo(i) / (precision_svm_train_completo(i) + sensibilita_svm_train_completo(i)) );
-        end
-    
-        % Calcolo della specificità per la classe i
-        TN = sum(CM_svm_train_completo(:)) - sum(CM_svm_train_completo(i,:)) - sum(CM_svm_train_completo(:,i)) + CM_svm_train_completo(i,i);
-        FP = sum(CM_svm_train_completo(:,i)) - CM_svm_train_completo(i,i);
-        specificita_svm_train_completo(i) = TN / (TN + FP);
-    end
-    
-    % Calcolo dell'accuratezza complessiva
-    total = sum(CM_svm_train_completo(:));
-    accuratezza_svm_train_completo = sum(diag(CM_svm_train_completo)) / total;
-    
-    % Stampa dell'accuratezza complessiva
-    fprintf('\n---------------------------\n');
-    fprintf('Accuratezza complessiva SVM - training set completo: %.2f\n', accuratezza_svm_train_completo*100);
+    metodo = "SVM";
+    set = "TrainingCompleto";
+    [CM_svm_trainC, acc_svm_trainC, prec_svm_trainC, spec_svm_trainC, sens_svm_trainC, f1_svm_trainC] = evaluaClassificatore(label, prediction_svm_trainC, mostra_cm, classi, metodo, set);
     
     
-    % Stampa dell'intestazione delle metriche
-    fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
-    
-    % Stampa delle metriche per ogni classe
-    for i = 1:numClassi
-        fprintf('%-10s %-12.2f %-12.2f %-12.2f %-12.2f\n', char(classi(i)), precision_svm_train_completo(i)*100, specificita_svm_train_completo(i)*100, sensibilita_svm_train_completo(i)*100, f1Score_svm_train_completo(i)*100);
-    end
-    fprintf('\n---------------------------\n');
     %% SVM - rappresentazione dati di training test completo
-    if mostra_grafici
+    if mostra_risultati_singoli
         figure;
         subplot(2,1,1);
         plot(prediction_svm_train_completo);
@@ -834,70 +642,20 @@ if valuta_training_completo
         label = label+1;
         label = full(ind2vec(label'));
     
-        prediction_nn_train_completo = net(sig_completo);
-        prediction_nn_train_completo = vec2ind(prediction_nn_train_completo);  % Converti le probabilità in indici di classe
+        prediction_nn_trainC = net(sig_completo);
+        prediction_nn_trainC = vec2ind(prediction_nn_trainC);  % Converti le probabilità in indici di classe
     
-        % Calcolo confusione matrix
+        % Riporta il valore dei label a quello corretto
         label = vec2ind(label)';
-        CM_nn_train_completo = confusionmat(label, prediction_nn_train_completo);
-        
-        if mostra_grafici
-                figure()
-                confusionchart(CM_nn_train_completo, classi)
-                title('Confusion Matrix NN - training set completo')
-        end
-
         label = label-1;
- 
-        %% Rete neurale - calcolo metriche per classe training set completo
-        numClassi = size(CM_nn_train_completo, 1);
+        prediction_nn_trainC = prediction_nn_trainC'-1; % Riporta alle label convenzionali
         
-        % Pre-allocazione memoria
-        precision_nn_train_completo = zeros(numClassi , 1);      % Quanti positivi lo erano davvero tra quelli positivi, TP/(TP+FP)
-        sensibilita_nn_train_completo = zeros(numClassi , 1);    % Quanti positivi effettivi sono stati identificati come tali, TP/(TP+FP)
-        f1Score_nn_train_completo = zeros(numClassi , 1);        % Media armonica di precision e sensibilità, utile quando la frequenza delle classi non è uguale
-        accuretazza_nn_train_completo = zeros(1, 1);             % Previsioni corrette rispetto al totale delle previsioni. Numero di predizioni corrette rispetto al numero totale di casi osservati. (TP + TN) / (TP+TN+FP+FN)
-        specificita_nn_train_completo = zeros(numClassi, 1);     % Quandi negativi effettivi sono stati identificati. TN / (TN+FP)
+        metodo = "NN";
+        set = "TrainingCompleto";
+        [CM_nn_trainC, acc_nn_trainC, prec_nn_trainC, spec_nn_trainC, sens_nn_trainC, f1_nn_trainC] = evaluaClassificatore(label, prediction_nn_trainC, mostra_cm, classi, metodo, set);
         
-        for i=1:numClassi
-            precision_nn_train_completo(i) = CM_nn_train_completo(i,i) / sum(CM_nn_train_completo(:,i));
-            sensibilita_nn_train_completo(i) = CM_nn_train_completo(i,i) / sum(CM_nn_train_completo(i,:));
-        
-            % Punteggio f1 per classe 1
-            if (precision_nn_train_completo(i) + sensibilita_nn_train_completo(i)) == 0
-                f1score_nn_train_completo(i) = 0;
-            else
-                f1Score_nn_train_completo(i) = 2*(precision_nn_train_completo(i)*sensibilita_nn_train_completo(i) / (precision_nn_train_completo(i) + sensibilita_nn_train_completo(i)) );
-            end
-        
-            % Calcolo della specificità per la classe i
-            TN = sum(CM_nn_train_completo(:)) - sum(CM_nn_train_completo(i,:)) - sum(CM_nn_train_completo(:,i)) + CM_nn_train_completo(i,i);
-            FP = sum(CM_nn_train_completo(:,i)) - CM_nn_train_completo(i,i);
-            specificita_nn_train_completo(i) = TN / (TN + FP);
-        end
-        
-        % Calcolo dell'accuratezza complessiva
-        total = sum(CM_nn_train_completo(:));
-        accuratezza_nn_train_completo = sum(diag(CM_nn_train_completo)) / total;
-        
-        % Stampa dell'accuratezza complessiva
-        fprintf('\n---------------------------\n');
-        fprintf('Accuratezza complessiva rete neurale - training set completo: %.2f\n', accuratezza_nn_train_completo*100);
-        
-        
-        % Stampa dell'intestazione delle metriche
-        fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
-        
-        % Stampa delle metriche per ogni classe
-        for i = 1:numClassi
-            fprintf('%-10d %-12.2f %-12.2f %-12.2f %-12.2f\n', i, precision_nn_train_completo(i)*100, specificita_nn_train_completo(i)*100, sensibilita_nn_train_completo(i)*100, f1Score_nn_train_completo(i)*100);
-        end
-            
-        fprintf('\n---------------------------\n');
-  
-  
 %% NN - rappresentazione dati training set completo
-    if mostra_grafici
+    if mostra_risultati_singoli
         figure;
         subplot(2,1,1);
         plot(prediction_nn_train_completo);
@@ -924,66 +682,15 @@ if caricamento_modelli
 end
 
 if valuta_training_completo
-    prediction_lda_train_completo = predict(lda_model, envelope_std);
-    CM_lda_train_completo = confusionmat(label,prediction_lda_train_completo);
-        
-        if mostra_grafici
-            figure()
-            confusionchart(CM_lda_train_completo, classi)
-            title('Confusion Matrix LDA - training set completo')
-        end
-
-%% LDA - calcolo metriche per classe training set completo
+    prediction_lda_trainC = predict(lda_model, envelope_std);
     
-    numClassi = size(CM_lda_train_completo, 1);
-    
-    % Pre-allocazione memoria
-    precision_lda_train_completo = zeros(numClassi , 1);      % Quanti positivi lo erano davvero tra quelli positivi, TP/(TP+FP)
-    sensibilita_lda_train_completo = zeros(numClassi , 1);    % Quanti positivi effettivi sono stati identificati come tali, TP/(TP+FP)
-    f1Score_lda_train_completo = zeros(numClassi , 1);        % Media armonica di precision e sensibilità, utile quando la frequenza delle classi non è uguale
-    accuretazza_lda_train_completo = zeros(1, 1);             % Previsioni corrette rispetto al totale delle previsioni. Numero di predizioni corrette rispetto al numero totale di casi osservati. (TP + TN) / (TP+TN+FP+FN)
-    specificita_lda_train_completo = zeros(numClassi, 1);     % Quandi negativi effettivi sono stati identificati. TN / (TN+FP)
-    
-    for i=1:numClassi
-        precision_lda_train_completo(i) = CM_lda_train_completo(i,i) / sum(CM_lda_train_completo(:,i));
-        sensibilita_lda_train_completo(i) = CM_lda_train_completo(i,i) / sum(CM_lda_train_completo(i,:));
-    
-        % Punteggio f1 per classe 1
-        if (precision_lda_train_completo(i) + sensibilita_lda_train_completo(i)) == 0
-            f1score_lda_train_completo(i) = 0;
-        else
-            f1Score_lda_train_completo(i) = 2*(precision_lda_train_completo(i)*sensibilita_lda_train_completo(i) / (precision_lda_train_completo(i) + sensibilita_lda_train_completo(i)) );
-        end
-    
-        % Calcolo della specificità per la classe i
-        TN = sum(CM_lda_train_completo(:)) - sum(CM_lda_train_completo(i,:)) - sum(CM_lda_train_completo(:,i)) + CM_lda_train_completo(i,i);
-        FP = sum(CM_lda_train_completo(:,i)) - CM_lda_train_completo(i,i);
-        specificita_lda_train_completo(i) = TN / (TN + FP);
-    end
-    
-    % Calcolo dell'accuratezza complessiva
-    total = sum(CM_lda_train_completo(:));
-    accuratezza_lda_train_completo = sum(diag(CM_lda_train_completo)) / total;
-    
-    % Stampa dell'accuratezza complessiva
-    fprintf('\n---------------------------\n');
-    fprintf('Accuratezza complessiva LDA - training test completo: %.2f\n', accuratezza_lda_train_completo*100);
-    
-    
-    % Stampa dell'intestazione delle metriche
-    fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
-    
-    % Stampa delle metriche per ogni classe
-    for i = 1:numClassi
-        fprintf('%-10s %-12.2f %-12.2f %-12.2f %-12.2f\n', char(classi(i)), precision_lda_train_completo(i)*100, specificita_lda_train_completo(i)*100, sensibilita_lda_train_completo(i)*100, f1Score_lda_train_completo(i)*100);
-    end
-    
-    fprintf('\n---------------------------\n');
-
+    metodo = "LDA";
+    set = "TrainingCompleto";
+    [CM_lda_trainC, acc_lda_trainC, prec_lda_trainC, spec_lda_trainC, sens_lda_trainC, f1_lda_trainC] = evaluaClassificatore(label, prediction_lda_trainC, mostra_cm, classi, metodo, set);
 
     %% LDA - Rappresentazione dati training test completo
     
-    if mostra_grafici
+    if mostra_risultati_singoli
         figure;
         subplot(2,1,1);
         plot(prediction_lda_train_completo);
@@ -1005,22 +712,22 @@ end
 %% Rappresentazione complessiva training test completo
 
 if valuta_training_completo
-    if mostra_grafici
+    if mostra_risultati_complessivi
         figure;
         subplot(4,1,1);
-        plot(prediction_svm_train_completo);
+        plot(prediction_svm_trainC);
         title('Predizioni SVM - training completo');
         xlabel('Campioni');
         ylabel('[a.u.]');
     
         subplot(4,1,2);
-        plot(prediction_nn_train_completo);
+        plot(prediction_nn_trainC);
         title('Predizioni NN - training completo');
         xlabel('Campioni');
         ylabel('[a.u.]');
     
         subplot(4,1,3);
-        plot(prediction_lda_train_completo);
+        plot(prediction_lda_trainC);
         title('Predizioni LDA - training completo');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -1130,7 +837,7 @@ if applica_postprocess
         end
     
     %% SVM - rappresentazione dati di test processati
-    if mostra_grafici
+    if mostra_risultati_singoli
         figure;
         subplot(3,1,1);
         plot(prediction_test_svm);
@@ -1166,12 +873,12 @@ function vec = creaEtichetta(n, start_indices, end_indices, value)
     end
 end
 
-function [CM, accuratezza, precisione, specificita, sensibilita, f1Score] = evaluaClassificatore(label_val, prediction, mostra_grafici, classi, nomeMetodo, nomeSet)
+function [CM, accuratezza, precisione, specificita, sensibilita, f1Score] = evaluaClassificatore(label_val, prediction, mostra_cm, classi, nomeMetodo, nomeSet)
     % Calcolo della matrice di confusione
     CM = confusionmat(label_val, prediction);
 
     % Visualizzazione della confusion matrix se richiesto
-    if mostra_grafici
+    if mostra_cm
         figure();
         confusionchart(CM, classi);
         title(['Confusion Matrix - ', nomeMetodo, ' - ', nomeSet]);
