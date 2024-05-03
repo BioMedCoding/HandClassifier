@@ -22,8 +22,8 @@ numero_worker = 10;                                 % Numero di worker da usare 
 caricamento_modelli = true;                         % Carica modelli già salvati quando usi il test set
 salva_modelli = false;                               % Salva o meno i modelli allenati                           
 percorso_salvataggio = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati"; % Percorso dove salvare i modelli
-valuta_validation = false;                           % Esegui valutazione dei vari modelli sul validation set
-valuta_training_completo = true;                    % Esegui valutazione dei vari modelli sul training set completo
+valuta_validation = true;                           % Esegui valutazione dei vari modelli sul validation set
+valuta_training_completo = false;                    % Esegui valutazione dei vari modelli sul training set completo
 valuta_test = false;                                 % Esegui valutazione dei vari modelli sul test set
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 applica_postprocess = false;
@@ -108,6 +108,9 @@ end
 
 % Standardizza i valori
 envelope_std = (envelope-mean(envelope))./std(envelope);
+
+% Istruzione per usare il segnale senza inviluppo
+%envelope_std = (sig_filt-mean(sig_filt))./std(sig_filt);
 
 if mostra_grafici
     figure()
@@ -224,62 +227,9 @@ end
 
 if valuta_validation
     prediction_svm_validation = predict(svm_model,sig_val);
-    
-    CM_svm_validation = confusionmat(label_val,prediction_svm_validation);
-    
-    if mostra_grafici
-        figure()
-        confusionchart(CM_svm_validation, classi)
-        title('Confusion Matrix SVM - validation')
-    end
-    
-    %% SVM - calcolo metriche per classe - VALIDATION
-    
-    numClassi = size(CM_svm_validation, 1);
-    
-    % Pre-allocazione memoria
-    precision_svm_validation = zeros(numClassi , 1);      % Quanti positivi lo erano davvero tra quelli positivi, TP/(TP+FP)
-    sensibilita_svm_validation = zeros(numClassi , 1);    % Quanti positivi effettivi sono stati identificati come tali, TP/(TP+FP)
-    f1Score_svm_validation = zeros(numClassi , 1);        % Media armonica di precision e sensibilità, utile quando la frequenza delle classi non è uguale
-    accuretazza_svm_validation = zeros(1, 1);             % Previsioni corrette rispetto al totale delle previsioni. Numero di predizioni corrette rispetto al numero totale di casi osservati. (TP + TN) / (TP+TN+FP+FN)
-    specificita_svm_validation = zeros(numClassi, 1);     % Quandi negativi effettivi sono stati identificati. TN / (TN+FP)
-    
-    for i=1:numClassi
-        precision_svm_validation(i) = CM_svm_validation(i,i) / sum(CM_svm_validation(:,i));
-        sensibilita_svm_validation(i) = CM_svm_validation(i,i) / sum(CM_svm_validation(i,:));
-    
-        % Punteggio f1 per classe 1
-        if (precision_svm_validation(i) + sensibilita_svm_validation(i)) == 0
-            f1score_svm_validation(i) = 0;
-        else
-            f1Score_svm_validation(i) = 2*(precision_svm_validation(i)*sensibilita_svm_validation(i) / (precision_svm_validation(i) + sensibilita_svm_validation(i)) );
-        end
-    
-        % Calcolo della specificità per la classe i
-        TN = sum(CM_svm_validation(:)) - sum(CM_svm_validation(i,:)) - sum(CM_svm_validation(:,i)) + CM_svm_validation(i,i);
-        FP = sum(CM_svm_validation(:,i)) - CM_svm_validation(i,i);
-        specificita_svm_validation(i) = TN / (TN + FP);
-    end
-    
-    % Calcolo dell'accuratezza complessiva
-    total = sum(CM_svm_validation(:));
-    accuratezza_svm_validation = sum(diag(CM_svm_validation)) / total;
-    
-    % Stampa dell'accuratezza complessiva
-    fprintf('\n---------------------------\n'); 
-    fprintf('Accuratezza complessiva SVM - validation: %.2f\n', accuratezza_svm_validation*100);
-    
-    
-    % Stampa dell'intestazione delle metriche
-    fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
-    
-    % Stampa delle metriche per ogni classe
-    for i = 1:numClassi
-        fprintf('%-10s %-12.2f %-12.2f %-12.2f %-12.2f\n', char(classi(i)), precision_svm_validation(i)*100, specificita_svm_validation(i)*100, sensibilita_svm_validation(i)*100, f1Score_svm_validation(i)*100);
-    end
-    
-    fprintf('\n---------------------------\n');
-           
+    metodo = "SVM";
+    set = "Validation";
+    [CM_svm_validation, acc_svm_validation, prec_svm_validation, spec_svm_validation, sens_svm_validation, f1_svm_validation] = evaluaClassificatore(label_val, prediction_svm_validation, mostra_grafici, classi, metodo, set); 
 end
 %pause
 %% LDA - addestramento
@@ -306,60 +256,9 @@ end
 
 if valuta_validation
     prediction_lda_validation = predict(lda_model, sig_val);
-    
-    CM_lda_validation = confusionmat(label_val,prediction_lda_validation);
-    if mostra_grafici
-        figure()
-        confusionchart(CM_lda_validation, classi)
-        title('Confusion Matrix LDA - validation')
-    end
-    
-    %% LDA - calcolo metriche per classe VALIDATION
-    numClassi = size(CM_lda_validation, 1);
-    
-    % Pre-allocazione memoria
-    precision_lda_validation = zeros(numClassi , 1);      % Quanti positivi lo erano davvero tra quelli positivi, TP/(TP+FP)
-    sensibilita_lda_validation = zeros(numClassi , 1);    % Quanti positivi effettivi sono stati identificati come tali, TP/(TP+FP)
-    f1Score_lda_validation = zeros(numClassi , 1);        % Media armonica di precision e sensibilità, utile quando la frequenza delle classi non è uguale
-    accuretazza_lda_validation = zeros(1, 1);             % Previsioni corrette rispetto al totale delle previsioni. Numero di predizioni corrette rispetto al numero totale di casi osservati. (TP + TN) / (TP+TN+FP+FN)
-    specificita_lda_validation = zeros(numClassi, 1);     % Quandi negativi effettivi sono stati identificati. TN / (TN+FP)
-    
-    for i=1:numClassi
-        precision_lda_validation(i) = CM_lda_validation(i,i) / sum(CM_lda_validation(:,i));
-        sensibilita_lda_validation(i) = CM_lda_validation(i,i) / sum(CM_lda_validation(i,:));
-    
-        % Punteggio f1 per classe 1
-        if (precision_lda_validation(i) + sensibilita_lda_validation(i)) == 0
-            f1score_lda_validation(i) = 0;
-        else
-            f1Score_lda_validation(i) = 2*(precision_lda_validation(i)*sensibilita_lda_validation(i) / (precision_lda_validation(i) + sensibilita_lda_validation(i)) );
-        end
-    
-        % Calcolo della specificità per la classe i
-        TN = sum(CM_lda_validation(:)) - sum(CM_lda_validation(i,:)) - sum(CM_lda_validation(:,i)) + CM_lda_validation(i,i);
-        FP = sum(CM_lda_validation(:,i)) - CM_lda_validation(i,i);
-        specificita_lda_validation(i) = TN / (TN + FP);
-    end
-    
-    % Calcolo dell'accuratezza complessiva
-    total = sum(CM_lda_validation(:));
-    accuratezza_lda_validation = sum(diag(CM_lda_validation)) / total;
-    
-    % Stampa dell'accuratezza complessiva
-    fprintf('\n---------------------------\n');
-    fprintf('Accuratezza complessiva LDA - validation: %.2f\n', accuratezza_lda_validation*100);
-    
-    
-    % Stampa dell'intestazione delle metriche
-    fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
-    
-    % Stampa delle metriche per ogni classe
-    for i = 1:numClassi
-        fprintf('%-10d %-12.2f %-12.2f %-12.2f %-12.2f\n', i, precision_lda_validation(i)*100, specificita_lda_validation(i)*100, sensibilita_lda_validation(i)*100, f1Score_lda_validation(i)*100);
-    end
-    
-    fprintf('\n---------------------------\n');
-
+    metodo = "LDA";
+    set = "Validation";
+    [CM_lad_validation, acc_lda_validation, prec_lda_validation, spec_lda_validation, sens_lda_validation, f1_lda_validation] = evaluaClassificatore(label_val, prediction_lda_validation, mostra_grafici, classi, metodo, set); 
 end
 
 
@@ -402,7 +301,7 @@ if allena_rete_neurale
     net.layers{3}.transferFcn = 'softmax';
 
     net.trainFcn = 'trainscg';  % Conjugate gradient
-    net.trainParam.epochs = 400;
+    net.trainParam.epochs = 300;
     net.trainParam.goal = 0.0005;
     %net.trainParam.useGPU = 'yes';  % Abilita l'uso della GPU
 
@@ -438,64 +337,15 @@ if valuta_validation
     label_val = label_val+1;
     label_val = full(ind2vec(label_val'));
 
-    predictions_nn_validation = net(sig_val);
-    predictions_nn_validation = vec2ind(predictions_nn_validation);  % Converti le probabilità in indici di classe
+    prediction_nn_validation = net(sig_val);
+    prediction_nn_validation = vec2ind(prediction_nn_validation);  % Converti le probabilità in indici di classe
 
     % Calcolo confusione matrix
     label_val = vec2ind(label_val)';
-    CM_nn_validation = confusionmat(label_val, predictions_nn_validation);
     
-    if mostra_grafici
-            figure()
-            confusionchart(CM_nn_validation, classi)
-            title('Confusion Matrix nn - validation')
-    end
-    
-    %% Rete neurale - calcolo metriche per classe - VALIDATION
-        numClassi = size(CM_nn_validation, 1);
-        
-        % Pre-allocazione memoria
-        precision_nn_validation = zeros(numClassi , 1);      % Quanti positivi lo erano davvero tra quelli positivi, TP/(TP+FP)
-        sensibilita_nn_validation = zeros(numClassi , 1);    % Quanti positivi effettivi sono stati identificati come tali, TP/(TP+FP)
-        f1Score_nn_validation = zeros(numClassi , 1);        % Media armonica di precision e sensibilità, utile quando la frequenza delle classi non è uguale
-        accuretazza_nn_validation = zeros(1, 1);             % Previsioni corrette rispetto al totale delle previsioni. Numero di predizioni corrette rispetto al numero totale di casi osservati. (TP + TN) / (TP+TN+FP+FN)
-        specificita_nn_validation = zeros(numClassi, 1);     % Quandi negativi effettivi sono stati identificati. TN / (TN+FP)
-        
-        for i=1:numClassi
-            precision_nn_validation(i) = CM_nn_validation(i,i) / sum(CM_nn_validation(:,i));
-            sensibilita_nn_validation(i) = CM_nn_validation(i,i) / sum(CM_nn_validation(i,:));
-        
-            % Punteggio f1 per classe 1
-            if (precision_nn_validation(i) + sensibilita_nn_validation(i)) == 0
-                f1score_nn_validation(i) = 0;
-            else
-                f1Score_nn_validation(i) = 2*(precision_nn_validation(i)*sensibilita_nn_validation(i) / (precision_nn_validation(i) + sensibilita_nn_validation(i)) );
-            end
-        
-            % Calcolo della specificità per la classe i
-            TN = sum(CM_nn_validation(:)) - sum(CM_nn_validation(i,:)) - sum(CM_nn_validation(:,i)) + CM_nn_validation(i,i);
-            FP = sum(CM_nn_validation(:,i)) - CM_nn_validation(i,i);
-            specificita_nn_validation(i) = TN / (TN + FP);
-        end
-        
-        % Calcolo dell'accuratezza complessiva
-        total = sum(CM_nn_validation(:));
-        accuratezza_nn_validation = sum(diag(CM_nn_validation)) / total;
-        
-        % Stampa dell'accuratezza complessiva
-        fprintf('\n---------------------------\n');
-        fprintf('Accuratezza complessiva rete neurale - validation: %.2f\n', accuratezza_nn_validation*100);
-        
-        
-        % Stampa dell'intestazione delle metriche
-        fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
-        
-        % Stampa delle metriche per ogni classe
-        for i = 1:numClassi
-            fprintf('%-10d %-12.2f %-12.2f %-12.2f %-12.2f\n', i, precision_nn_validation(i)*100, specificita_nn_validation(i)*100, sensibilita_nn_validation(i)*100, f1Score_nn_validation(i)*100);
-        end
-        
-        fprintf('\n---------------------------\n');
+    metodo = "NN";
+    set = "Validation";
+    [CM_nn_validation, acc_nn_validation, prec_nn_validation, spec_nn_validation, sens_nn_validation, f1_nn_validation] = evaluaClassificatore(label_val, prediction_nn_validation, mostra_grafici, classi, metodo, set); 
 
 end
 %% Import dati test set
@@ -1284,6 +1134,56 @@ function vec = creaEtichetta(n, start_indices, end_indices, value)
         vec(start_indices(i):end_indices(i)) = value;
     end
 end
+
+function [CM, accuratezza, precisione, specificita, sensibilita, f1Score] = evaluaClassificatore(label_val, prediction, mostra_grafici, classi, nomeMetodo, nomeSet)
+    % Calcolo della matrice di confusione
+    CM = confusionmat(label_val, prediction);
+
+    % Visualizzazione della confusion matrix se richiesto
+    if mostra_grafici
+        figure();
+        confusionchart(CM, classi);
+        title(['Confusion Matrix - ', nomeMetodo, ' - ', nomeSet]);
+    end
+
+    % Calcolo delle metriche per ogni classe
+    numClassi = size(CM, 1);
+    precisione = zeros(numClassi, 1);
+    sensibilita = zeros(numClassi, 1);
+    f1Score = zeros(numClassi, 1);
+    specificita = zeros(numClassi, 1);
+
+    for i = 1:numClassi
+        precisione(i) = CM(i, i) / sum(CM(:, i));
+        sensibilita(i) = CM(i, i) / sum(CM(i, :));
+
+        if (precisione(i) + sensibilita(i)) == 0
+            f1Score(i) = 0;
+        else
+            f1Score(i) = 2 * (precisione(i) * sensibilita(i)) / (precisione(i) + sensibilita(i));
+        end
+
+        TN = sum(CM(:)) - sum(CM(i, :)) - sum(CM(:, i)) + CM(i, i);
+        FP = sum(CM(:, i)) - CM(i, i);
+        specificita(i) = TN / (TN + FP);
+    end
+
+    % Calcolo dell'accuratezza complessiva
+    total = sum(CM(:));
+    accuratezza = sum(diag(CM)) / total;
+
+    % Stampa delle metriche per ogni classe
+    fprintf('\n---------------------------\n');
+    fprintf('Accuratezza complessiva %s - %s: %.2f%%\n', nomeMetodo, nomeSet, accuratezza * 100);
+    fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
+
+    for i = 1:numClassi
+        fprintf('%-10d %-12.2f %-12.2f %-12.2f %-12.2f\n', i, precisione(i)*100, specificita(i)*100, sensibilita(i)*100, f1Score(i)*100);
+    end
+
+    fprintf('\n---------------------------\n');
+end
+
 
 
 % Qui sotto si hanno tentativi di implementazioni di funzioni di postproces, anche live
