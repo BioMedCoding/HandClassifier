@@ -1,11 +1,8 @@
 % Inizializzazione
-clear all
+clear 
 close all
 clc
 
-% Da verificare:
-% 1. Salvataggio modelli
-% 2, Scegliere una logica per il load dei modelli
 
 %% Impostazioni script e inizializzazione
 
@@ -15,16 +12,22 @@ mostra_grafici = true;                              % Mostra grafici prodotti du
 valore_apertura = 1;                                % Valore label apertura
 valore_chiusura = 2;                                % Valore label chiusura
 classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
+
 allena_svm = false;                                  % Esegui la sezione di addestramento e testing SVM
 allena_lda = false;                                  % Esegui la sezione di addestramento e testing LDA
 allena_rete_neurale = false;                         % Esegui la sezione di addestramento e testing rete neurale
-numero_worker = 10;                                 % Numero di worker da usare per il parallel pool
+
+numero_worker = 14;                                 % Numero di worker da usare per il parallel pool
 caricamento_modelli = true;                         % Carica modelli già salvati quando usi il test set
 salva_modelli = false;                               % Salva o meno i modelli allenati                           
 percorso_salvataggio = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati"; % Percorso dove salvare i modelli
-valuta_validation = true;                           % Esegui valutazione dei vari modelli sul validation set
-valuta_training_completo = false;                    % Esegui valutazione dei vari modelli sul training set completo
-valuta_test = false;                                 % Esegui valutazione dei vari modelli sul test set
+
+valuta_validation = false;                           % Esegui valutazione dei vari modelli sul validation set
+valuta_training_completo = true;                    % Esegui valutazione dei vari modelli sul training set completo
+valuta_test = true;                                 % Esegui valutazione dei vari modelli sul test set
+
+prediction_parallel = false;                         % Esegui il comando predict usando il parfor (parallel pool)
+
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 applica_postprocess = false;
 % =========================================================================
@@ -49,7 +52,7 @@ svm_parameter_hypertuning = false;                  % Abilita hypertuning automa
 svm_calcolo_GPU = false;                            % Abilita l'addestramento dell'SVM tramite l'uso della GPU
 ore_esecuzione_massime = 3;                         % Numero massimo di ora per cui continuare l'hypertuning automatico dei parametri
 
-t_hyp = templateSVM('KernelFunction', 'rbf', 'KernelScale', 'auto');
+t_hyper = templateSVM('KernelFunction', 'rbf', 'KernelScale', 'auto');
 opts_hyp = struct('AcquisitionFunctionName', 'expected-improvement-plus', ...
     'UseParallel', true, ...
     'MaxObjectiveEvaluations', 30, ... 
@@ -64,9 +67,28 @@ coding_single = 'onevsall'; % onevsone, onevsall
 % =========================================================================
 
 
+
+%  ========================Parametri addestramento NN =====================
+max_epoche = 300;   
+val_metrica_obiettivo = 0.005;
+train_function = 'trainscg';
+% =========================================================================
+
+
+
 % ======================== Parametri addestramento LDA ====================
 discrimType = 'linear'; % quadratic, diaglinear, diagquadratic, pseudolinear, pseudoquadratic
 % =========================================================================
+
+% Avvio pool se necessario e non attivo
+
+if prediction_parallel || svm_parameter_hypertuning
+    if isempty(gcp('nocreate'))
+            parpool('local', numero_worker); % Avvia in modalità processes
+            %parpool('Threads')              % Avvia in modalità thread
+    end
+end
+
 
 %% Import segnali
 
@@ -88,11 +110,16 @@ sig = [sig_aperture; sig_chiusura];
 
 n_channel = length(sig(1,:));
 
+% Pre-alloca le matrici
+sig_filt= zeros(length(sig),n_channel);
+
+
 % Filtraggio segnale
 for i=1:n_channel
     sig_filt(:,i) = filter_general(sig(:,i),tipo_filtro,f_sample,"fL",f_taglio_basso,"fH",f_taglio_alta,"fN",f_notch,"visualisation",visualisation);
 end
 
+envelope = zeros(length(sig_filt),n_channel);
 % Creazione inviluppo
 for i=1:n_channel
     envelope(:,i) = filter_general(abs(sig_filt(:,i)),tipo_filtro,f_sample,"fH",f_envelope,"percH",percH);   
@@ -185,20 +212,17 @@ label_val = label(validation_idx,:);
 if allena_svm
 
     if svm_parameter_hypertuning
-        % Attivazione parallelo pool
-        if isempty(gcp('nocreate'))
-            parpool('local', numero_worker); % Avvia un pool di lavoratori utilizzando il numero di core disponibile
-        end
+        
         % Selezione se GPU o CPU
         if svm_calcolo_GPU
             % Trasferimento dei dati sulla GPU
             gpu_sig_train = gpuArray(sig_train);
             gpu_label_train = gpuArray(label_train);
-            %svm_model = fitcecoc(gpu_sig_train,gpu_label_train, 'Learners', t_hyp, 'OptimizeHyperparameters', 'auto', 'HyperparameterOptimizationOptions', opts_hyp, 'ClassNames', classi); 
-            svm_model = fitcecoc(gpu_sig_train,gpu_label_train, 'Learners', t_hyp, 'OptimizeHyperparameters', 'auto', 'HyperparameterOptimizationOptions', opts_hyp); 
+            %svm_model = fitcecoc(gpu_sig_train,gpu_label_train, 'Learners', t_hyper, 'OptimizeHyperparameters', 'auto', 'HyperparameterOptimizationOptions', opts_hyp, 'ClassNames', classi); 
+            svm_model = fitcecoc(gpu_sig_train,gpu_label_train, 'Learners', t_hyper, 'OptimizeHyperparameters', 'auto', 'HyperparameterOptimizationOptions', opts_hyp); 
             svm_model = gather(svm_model);
         else
-            svm_model = fitcecoc(sig_train,label_train, 'Learners', t_hyp, 'OptimizeHyperparameters', 'auto', 'HyperparameterOptimizationOptions', opts_hyp);
+            svm_model = fitcecoc(sig_train,label_train, 'Learners', t_hyper, 'OptimizeHyperparameters', 'auto', 'HyperparameterOptimizationOptions', opts_hyp);
         end
     else    % Addestramento singolo
         if svm_calcolo_GPU
@@ -226,7 +250,18 @@ if caricamento_modelli
 end
 
 if valuta_validation
-    prediction_svm_validation = predict(svm_model,sig_val);
+    %
+    
+    if prediction_parallel
+        numData = size(sig_val, 1);
+        prediction_svm_validation = zeros(numData, 1);  % Preallocazione del vettore delle predizioni
+        parfor i = 1:numData
+            prediction_svm_validation(i) = predict(svm_model, sig_val(i, :));
+        end
+    else
+        prediction_svm_validation = predict(svm_model,sig_val);
+    end
+
     metodo = "SVM";
     set = "Validation";
     [CM_svm_validation, acc_svm_validation, prec_svm_validation, spec_svm_validation, sens_svm_validation, f1_svm_validation] = evaluaClassificatore(label_val, prediction_svm_validation, mostra_grafici, classi, metodo, set); 
@@ -300,9 +335,9 @@ if allena_rete_neurale
     net.layers{2}.transferFcn = 'tansig';
     net.layers{3}.transferFcn = 'softmax';
 
-    net.trainFcn = 'trainscg';  % Conjugate gradient
-    net.trainParam.epochs = 300;
-    net.trainParam.goal = 0.0005;
+    net.trainFcn = train_function;  % Conjugate gradient
+    net.trainParam.epochs = max_epoche;
+    net.trainParam.goal = val_metrica_obiettivo;
     %net.trainParam.useGPU = 'yes';  % Abilita l'uso della GPU
 
     % Comandi per gestire automaticamente la gestione dell'intero dataset
@@ -1187,72 +1222,72 @@ end
 
 
 % Qui sotto si hanno tentativi di implementazioni di funzioni di postproces, anche live
-function [valoreCorretto, bufferValori] = LivePostProcess(bufferValori, nuovoValore, soglia)
-    
-    % Aggiungi il nuovo valore al buffer togliendo il valore più vecchio per fargli posto
-    bufferValori = vertcat(bufferValori(2:end), nuovoValore);    
+% function [valoreCorretto, bufferValori] = LivePostProcess(bufferValori, nuovoValore, soglia)
+% 
+%     % Aggiungi il nuovo valore al buffer togliendo il valore più vecchio per fargli posto
+%     bufferValori = vertcat(bufferValori(2:end), nuovoValore);    
+% 
+%     if all(nuovoValore ~= bufferValori(end-soglia+1:end))
+%         valoreCorretto = bufferValori(end-2);
+%     else
+%         valoreCorretto = nuovoValore;
+%     end
+% 
+%     % Restituisci il valore corretto e il buffer aggiornato
+%     bufferValori(end) = valoreCorretto;
+% end
 
-    if all(nuovoValore ~= bufferValori(end-soglia+1:end))
-        valoreCorretto = bufferValori(end-2);
-    else
-        valoreCorretto = nuovoValore;
-    end
-    
-    % Restituisci il valore corretto e il buffer aggiornato
-    bufferValori(end) = valoreCorretto;
-end
-
-function output = correggiVettore(inputVec, minLen)
-    % Input:
-    % inputVec - Vettore di input contenente i valori 0, 1, 2
-    % minLen - Lunghezza minima di numeri consecutivi che non richiede modifica
-    %
-    % Output:
-    % output - Vettore corretto
-
-    output = inputVec;
-    n = length(inputVec);
-    idx = 1;
-
-    while idx <= n
-        % Trova la lunghezza della serie attuale
-        startIdx = idx;
-        while idx <= n && inputVec(idx) == inputVec(startIdx)
-            idx = idx + 1;
-        end
-        len = idx - startIdx;
-
-        % Se la serie è troppo breve e non si trova all'inizio o alla fine
-        if len < minLen && startIdx > 1 && idx <= n
-            % Trova il valore precedente
-            prevVal = inputVec(startIdx - 1);
-            
-            % Decidi se estendere il valore precedente o quello successivo
-            if idx <= n
-                nextVal = inputVec(idx);
-                % Calcola il numero di elementi successivi identici
-                nextLen = 0;
-                for j = idx:n
-                    if inputVec(j) == nextVal
-                        nextLen = nextLen + 1;
-                    else
-                        break;
-                    end
-                end
-
-                % Scegli il valore da propagare in base alla maggior presenza
-                if nextLen > len
-                    output(startIdx:idx-1) = nextVal;
-                else
-                    output(startIdx:idx-1) = prevVal;
-                end
-            else
-                % Propaga il valore precedente se la serie è alla fine
-                output(startIdx:idx-1) = prevVal;
-            end
-        end
-    end
-end
+% function output = correggiVettore(inputVec, minLen)
+%     % Input:
+%     % inputVec - Vettore di input contenente i valori 0, 1, 2
+%     % minLen - Lunghezza minima di numeri consecutivi che non richiede modifica
+%     %
+%     % Output:
+%     % output - Vettore corretto
+% 
+%     output = inputVec;
+%     n = length(inputVec);
+%     idx = 1;
+% 
+%     while idx <= n
+%         % Trova la lunghezza della serie attuale
+%         startIdx = idx;
+%         while idx <= n && inputVec(idx) == inputVec(startIdx)
+%             idx = idx + 1;
+%         end
+%         len = idx - startIdx;
+% 
+%         % Se la serie è troppo breve e non si trova all'inizio o alla fine
+%         if len < minLen && startIdx > 1 && idx <= n
+%             % Trova il valore precedente
+%             prevVal = inputVec(startIdx - 1);
+% 
+%             % Decidi se estendere il valore precedente o quello successivo
+%             if idx <= n
+%                 nextVal = inputVec(idx);
+%                 % Calcola il numero di elementi successivi identici
+%                 nextLen = 0;
+%                 for j = idx:n
+%                     if inputVec(j) == nextVal
+%                         nextLen = nextLen + 1;
+%                     else
+%                         break;
+%                     end
+%                 end
+% 
+%                 % Scegli il valore da propagare in base alla maggior presenza
+%                 if nextLen > len
+%                     output(startIdx:idx-1) = nextVal;
+%                 else
+%                     output(startIdx:idx-1) = prevVal;
+%                 end
+%             else
+%                 % Propaga il valore precedente se la serie è alla fine
+%                 output(startIdx:idx-1) = prevVal;
+%             end
+%         end
+%     end
+% end
 
 % function output = correggiVettore(inputVec, minLen)
 %     % Input:
