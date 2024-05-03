@@ -770,12 +770,12 @@ if applica_postprocess
 
     % La gestione dei bordi è affidata al ciclo sul vettore
 
-    % Test funzione chat
+    % Test funzione 1
     % Chiamata alla funzione per migliorare le etichette
-    prediction_processate = improveClassifierOutput(prediction_svm_test);
+    prediction_processate = improveClassifierOutput(prediction_nn_test);
 
-    figure()
-    plot(prediction_svm_test)
+    figure
+    plot(prediction_nn_test)
     hold on
     plot(prediction_processate + 3)
     legend('Prediction Original', 'Prediction processata')
@@ -786,9 +786,9 @@ if applica_postprocess
     
     %% SVM - rappresentazione dati di test processati
     if mostra_risultati_complessivi
-        figure;
+        figure()
         subplot(3,1,1);
-        plot(prediction_svm_test);
+        plot(prediction_nn_test);
         title('Predizioni originali');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -876,9 +876,9 @@ end
 
 % Questo funziona ma solo offline, con intero vettore
 function labels = improveClassifierOutput(rawLabels)
-    threshold = 300;  % Soglia di campioni
+    threshold = 400;        % Soglia di campioni
     n = length(rawLabels);  % Numero totale di etichette
-    labels = rawLabels;  % Inizializza l'output con l'input
+    labels = rawLabels;     % Inizializza l'output con l'input
     
     i = 1;
     while i <= n
@@ -901,12 +901,7 @@ function labels = improveClassifierOutput(rawLabels)
     return
 end
 
-
-
-
-
-
-% Tentativo mio
+% Tentativo mio 2
 % function [correct_value, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda)
 % 
 %     if all(nuovo_campione ~= buffer_precedenti) 
