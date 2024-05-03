@@ -24,13 +24,13 @@ salva_modelli = false;                               % Salva o meno i modelli al
 percorso_salvataggio = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati"; % Percorso dove salvare i modelli
 
 valuta_validation = false;                           % Esegui valutazione dei vari modelli sul validation set
-valuta_training_completo = true;                    % Esegui valutazione dei vari modelli sul training set completo
+valuta_training_completo = false;                    % Esegui valutazione dei vari modelli sul training set completo
 valuta_test = true;                                 % Esegui valutazione dei vari modelli sul test set
 
 prediction_parallel = false;                         % Esegui il comando predict usando il parfor (parallel pool)
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
-applica_postprocess = false;                         % Applica funzionid postprocess sul vettore di classificazione
+applica_postprocess = true;                         % Applica funzionid postprocess sul vettore di classificazione
 % =========================================================================
 
 
@@ -100,7 +100,7 @@ sig(:,1) = [];
 sig_aperture = table2array(sig);
 % Import segnali chiusura
 sig = readtable('Data\chiusure.txt',"Delimiter", '\t');
-t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
+%t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
 sig(:,1) = [];
 sig_chiusura = table2array(sig);
 
@@ -332,7 +332,7 @@ if allena_rete_neurale
     % % Addestramento del modello
     % net = trainNetwork(sig_train, label_train, layers, options);
 
-    net = patternnet([50 30], 'trainscg', 'crossentropy');  % Esempio con due hidden layers
+    net = patternnet([10 5], 'trainscg', 'crossentropy');  % Esempio con due hidden layers
     net.layers{1}.transferFcn = 'tansig';
     net.layers{2}.transferFcn = 'tansig';
     net.layers{3}.transferFcn = 'softmax';
@@ -776,77 +776,42 @@ if applica_postprocess
     % end
     
     % Tentativo con funzione postuma
-    lunghezza_minima = 400; % Lunghezza minima dove non corregge serie di valori, in campioni
-    prediction_processata = correggiVettore(prediction_test_svm, lunghezza_minima);
+    %lunghezza_minima = 400; % Lunghezza minima dove non corregge serie di valori, in campioni
+    %prediction_processata = correggiVettore(prediction_test_svm, lunghezza_minima);
     
+    %lunghezza_precedenti = 1;
+    %lunghezza_futuri = 200;    % Equivale a 100 ms
+
+    %buffer_precedenti = zeros(1,lunghezza_precedenti);
+    %buffer_futuri= zeros(1,lunghezza_futuri);
+
+    % La gestione dei bordi è affidata al ciclo sul vettore
+
+    % Test funzione chat
+    % Chiamata alla funzione per migliorare le etichette
+    prediction_processate = improveClassifierOutput(prediction_svm_test);
+
     figure()
-    plot(prediction_test_svm)
+    plot(prediction_svm_test)
     hold on
-    plot(prediction_processata)
+    plot(prediction_processate + 3)
     legend('Prediction Original', 'Prediction processata')
-    
-    CM_svm_test_processato = confusionmat(label_test,prediction_processata);
-        
-        if mostra_grafici
-            figure()
-            confusionchart(CM_svm_test_processata, classi)
-        end
-    
-    %% SVM - calcolo metriche per classe sul TEST SET PROCESSATO
-        
-        numClassi = size(CM_svm_test_processata, 1);
-        
-        % Pre-allocazione memoria
-        precision_svm_test = zeros(numClassi , 1);      % Quanti positivi lo erano davvero tra quelli positivi, TP/(TP+FP)
-        sensibilita_svm_test = zeros(numClassi , 1);    % Quanti positivi effettivi sono stati identificati come tali, TP/(TP+FP)
-        f1Score_svm_test = zeros(numClassi , 1);        % Media armonica di precision e sensibilità, utile quando la frequenza delle classi non è uguale
-        accuretazza_svm_test = zeros(1, 1);             % Previsioni corrette rispetto al totale delle previsioni. Numero di predizioni corrette rispetto al numero totale di casi osservati. (TP + TN) / (TP+TN+FP+FN)
-        specificita_svm_test = zeros(numClassi, 1);     % Quandi negativi effettivi sono stati identificati. TN / (TN+FP)
-        
-        for i=1:numClassi
-            precision_svm_test(i) = CM_svm_test_processata(i,i) / sum(CM_svm_test_processata(:,i));
-            sensibilita_svm_test(i) = CM_svm_test_processata(i,i) / sum(CM_svm_test_processata(i,:));
-        
-            % Punteggio f1 per classe 1
-            if (precision_svm_test(i) + sensibilita_svm_test(i)) == 0
-                f1score_svm_test(i) = 0;
-            else
-                f1Score_svm_test(i) = 2*(precision_svm_test(i)*sensibilita_svm_test(i) / (precision_svm_test(i) + sensibilita_svm_test(i)) );
-            end
-        
-            % Calcolo della specificità per la classe i
-            TN = sum(CM_svm_test_processata(:)) - sum(CM_svm_test_processata(i,:)) - sum(CM_svm_test_processata(:,i)) + CM_svm_test_processata(i,i);
-            FP = sum(CM_svm_test_processata(:,i)) - CM_svm_test_processata(i,i);
-            specificita_svm_test(i) = TN / (TN + FP);
-        end
-        
-        % Calcolo dell'accuratezza complessiva
-        total = sum(CM_svm_test_processata(:));
-        accuratezza_svm_test = sum(diag(CM_svm_test_processata)) / total;
-        
-        % Stampa dell'accuratezza complessiva
-        fprintf('Accuratezza complessiva: %.2f\n', accuratezza_svm_test*100);
-        
-        
-        % Stampa dell'intestazione delle metriche
-        fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
-        
-        % Stampa delle metriche per ogni classe
-        for i = 1:numClassi
-            fprintf('%-10s %-12.2f %-12.2f %-12.2f %-12.2f\n', char(classi(i)), precision_svm_test(i)*100, specificita_svm_test(i)*100, sensibilita_svm_test(i)*100, f1Score_svm_test(i)*100);
-        end
+
+    metodo = "Prediction processate";
+    set = "Test";
+    [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate] = evaluaClassificatore(label_test, prediction_processate, mostra_cm, classi, metodo, set);
     
     %% SVM - rappresentazione dati di test processati
-    if mostra_risultati_singoli
+    if mostra_risultati_complessivi
         figure;
         subplot(3,1,1);
-        plot(prediction_test_svm);
+        plot(prediction_svm_test);
         title('Predizioni originali');
         xlabel('Campioni');
         ylabel('[a.u.]');
         
         subplot(3,1,2);
-        plot(prediction_processata);
+        plot(prediction_processate);
         title('Predizioni processate');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -923,158 +888,60 @@ function [CM, accuratezza, precisione, specificita, sensibilita, f1Score] = eval
 end
 
 
+% Da qui sotto sono tutti i vari test sulle funzioni di post, non guardare
 
-% Qui sotto si hanno tentativi di implementazioni di funzioni di postproces, anche live
-% function [valoreCorretto, bufferValori] = LivePostProcess(bufferValori, nuovoValore, soglia)
+
+% Questo funziona ma solo offline, con intero vettore
+function labels = improveClassifierOutput(rawLabels)
+    threshold = 300;  % Soglia di campioni
+    n = length(rawLabels);  % Numero totale di etichette
+    labels = rawLabels;  % Inizializza l'output con l'input
+    
+    i = 1;
+    while i <= n
+        % Trova l'inizio e la fine di una sottoserie
+        start = i;
+        while i <= n && labels(i) == labels(start)
+            i = i + 1;
+        end
+        finish = i - 1;
+        
+        % Calcola la lunghezza della sottoserie
+        len = finish - start + 1;
+        
+        % Se la sottoserie è più corta della soglia, modifica le etichette
+        if len < threshold && start > 1
+            labels(start:finish) = labels(start - 1);
+        end
+    end
+    
+    return
+end
+
+
+
+
+
+
+% Tentativo mio
+% function [correct_value, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda)
 % 
-%     % Aggiungi il nuovo valore al buffer togliendo il valore più vecchio per fargli posto
-%     bufferValori = vertcat(bufferValori(2:end), nuovoValore);    
+%     if all(nuovo_campione ~= buffer_precedenti) 
+%             cambiamento_stato = 1;
+%     end
 % 
-%     if all(nuovoValore ~= bufferValori(end-soglia+1:end))
-%         valoreCorretto = bufferValori(end-2);
+%     if cambiamento_stato
+%         if (coda) < length(buffer_precedenti)
+%             buffer_precedenti(coda) = nuovo_campione;
+%             correct_value = -1;
+%         end
 %     else
-%         valoreCorretto = nuovoValore;
-%     end
 % 
-%     % Restituisci il valore corretto e il buffer aggiornato
-%     bufferValori(end) = valoreCorretto;
-% end
-
-% function output = correggiVettore(inputVec, minLen)
-%     % Input:
-%     % inputVec - Vettore di input contenente i valori 0, 1, 2
-%     % minLen - Lunghezza minima di numeri consecutivi che non richiede modifica
-%     %
-%     % Output:
-%     % output - Vettore corretto
-% 
-%     output = inputVec;
-%     n = length(inputVec);
-%     idx = 1;
-% 
-%     while idx <= n
-%         % Trova la lunghezza della serie attuale
-%         startIdx = idx;
-%         while idx <= n && inputVec(idx) == inputVec(startIdx)
-%             idx = idx + 1;
-%         end
-%         len = idx - startIdx;
-% 
-%         % Se la serie è troppo breve e non si trova all'inizio o alla fine
-%         if len < minLen && startIdx > 1 && idx <= n
-%             % Trova il valore precedente
-%             prevVal = inputVec(startIdx - 1);
-% 
-%             % Decidi se estendere il valore precedente o quello successivo
-%             if idx <= n
-%                 nextVal = inputVec(idx);
-%                 % Calcola il numero di elementi successivi identici
-%                 nextLen = 0;
-%                 for j = idx:n
-%                     if inputVec(j) == nextVal
-%                         nextLen = nextLen + 1;
-%                     else
-%                         break;
-%                     end
-%                 end
-% 
-%                 % Scegli il valore da propagare in base alla maggior presenza
-%                 if nextLen > len
-%                     output(startIdx:idx-1) = nextVal;
-%                 else
-%                     output(startIdx:idx-1) = prevVal;
-%                 end
-%             else
-%                 % Propaga il valore precedente se la serie è alla fine
-%                 output(startIdx:idx-1) = prevVal;
-%             end
-%         end
-%     end
-% end
-
-% function output = correggiVettore(inputVec, minLen)
-%     % Input:
-%     % inputVec - Vettore di input contenente i valori 0, 1, 2
-%     % minLen - Lunghezza minima di numeri consecutivi che non richiede modifica
-%     %
-%     % Output:
-%     % output - Vettore corretto
-% 
-%     % Inizializzazione del vettore di output e variabili
-%     output = inputVec;
-%     n = length(inputVec);
-%     currentVal = inputVec(1);  % Inizializza al primo elemento
-%     startIdx = 1;  % Indice di inizio di una serie
-% 
-%     for i = 2:n
-%         if inputVec(i) ~= currentVal
-%             if i - startIdx < minLen  % Se la serie è troppo breve
-%                 if startIdx > 1 % Evita cambi all'inizio del vettore
-%                     if (i + minLen - 1 <= n) % Evita cambi alla fine del vettore
-%                         % Analizza il valore seguente alla serie breve
-%                         nextVal = inputVec(i);
-%                         countNext = 1;
-%                         for j = i+1:n
-%                             if inputVec(j) == nextVal
-%                                 countNext = countNext + 1;
-%                             else
-%                                 break;
-%                             end
-%                         end
-%                         % Sostituisce con il valore più frequente vicino alla serie breve
-%                         if countNext >= i - startIdx
-%                             output(startIdx:i-1) = nextVal;
-%                         else
-%                             output(startIdx:i-1) = inputVec(startIdx-1);
-%                         end
-%                     end
-%                 end
-%             end
-%             currentVal = inputVec(i);
-%             startIdx = i;
-%         end
-%     end
-% 
-%     % Ultima serie
-%     if n + 1 - startIdx < minLen && startIdx > 1
-%         output(startIdx:end) = inputVec(startIdx-1);
 %     end
 % end
 
 
 
 
-
-% function processed_output = postProcess(input_vector, length_threshold, value)
-% 
-%     processed_output = input_vector;
-%     n = length(processed_output);
-% 
-%     % Indice che scorre il vettore completo
-%     i=1;    
-% 
-%     while i<=n
-%         % Controlla se il valore corrente è il valore da trovare
-%         if vettore(i) == valore_da_trovare
-%             % Inizia a contare quanti volte si ripete il valore
-%             inizio_serie = i;
-%             while i <= n && vettore(i) == valore_da_trovare
-%                 i = i + 1;
-%             end
-%             fine_serie = i - 1;
-% 
-%             % Calcola la lunghezza della serie trovata
-%             lunghezza_serie = fine_serie - inizio_serie + 1;
-% 
-%             % Se la lunghezza della serie è minore della soglia, azzera quella serie
-%             if lunghezza_serie < soglia
-%                 processed_output(inizio_serie:fine_serie) = 0;
-%             end
-%         else
-%             i = i + 1;  % Incrementa l'indice se il valore corrente non è quello da trovare
-%         end
-%     end
-% 
-% end
 
 
