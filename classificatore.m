@@ -776,11 +776,11 @@ if applica_postprocess
     % Chiamata alla funzione per migliorare le etichette
     %prediction_processate = improveClassifierOutput(prediction_nn_test);
 
-    predizione_originale = prediction_nn_trainC;
+    predizione_originale = prediction_nn_test;
     
     coda = 1;
-    lunghezza_buffer_precedenti = 300;
-    lunghezza_buffer_successivi = 300;
+    lunghezza_buffer_precedenti = 400;
+    lunghezza_buffer_successivi = 400;
     buffer_precedenti = [];
     buffer_futuri = [];
     cambiamento_stato = 0;
@@ -805,7 +805,7 @@ if applica_postprocess
         else % Caso dove si è distante da inizio e fine
             nuovo_campione = predizione_originale(index);
             % liveProcess(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, futuri_massimi)
-            [valore_corretto, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, lunghezza_buffer_successivi);
+            [valore_corretto, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess2(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, lunghezza_buffer_successivi);
             if cambiamento_stato ~= 2 && cambiamento_stato ~= -1 && valore_corretto ~= -1
                 predizione_processata(index) = valore_corretto;
             elseif valore_corretto == -1 && cambiamento_stato == 1 % Caso in cui si sta popolando il vettore_futuri
@@ -831,13 +831,13 @@ if applica_postprocess
 
     metodo = "Prediction processate";
     set = "Test";
-    [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate] = evaluaClassificatore(label, predizione_processata, mostra_cm, classi, metodo, set);
+    [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate] = evaluaClassificatore(label_test, predizione_processata, mostra_cm, classi, metodo, set);
     
     %% SVM - rappresentazione dati di test processati
     if mostra_risultati_complessivi
         figure()
         subplot(3,1,1);
-        plot(prediction_nn_trainC);
+        plot(predizione_originale);
         title('Predizioni originali');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -849,7 +849,7 @@ if applica_postprocess
         ylabel('[a.u.]');
         
         subplot(3,1,3);
-        plot(label);
+        plot(label_test);
         title('Ground truth');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -984,8 +984,36 @@ function [correct_value, cambiamento_stato, buffer_precedenti, buffer_futuri, co
     end
 end
 
+function [correct_value, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess2(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, futuri_massimi)
 
+    if all(nuovo_campione ~= buffer_precedenti )
+            cambiamento_stato = 1;
+    end
 
+    if cambiamento_stato
+        if (coda) < futuri_massimi+1                    % Caso in cui il transitorio di osservazione non è ancora finito
+            buffer_futuri(coda) = nuovo_campione;
+            correct_value = -1;                       % In questo modo si segnala che è durante un transitorio
+            buffer_precedenti = buffer_precedenti;    % Il buffer rimane inalterato
+            coda = coda+1;                            % Aggiorna quello che è il contatore degli elementi in coda nel buffer futuro
 
+        else                                          % Caso in cui il transitorio di osservazione è finito
+            if all(buffer_futuri == buffer_futuri(1)) % Indica che tutti i nuovi valori sono coerenti
+                 %correct_value = buffer_futuri(1);     % Restituisci il valore corretto
+                 correct_value = mode(buffer_futuri);
+                 cambiamento_stato = 2;                % Segnala termine controllo con risultati ok
+                 buffer_precedenti = buffer_futuri(end-length(buffer_precedenti)+1:end);
+                 buffer_futuri = [];                 % Resetta il buffer futuri
+                 coda = 1;
+            else
+                correct_value = buffer_precedenti(end);
+                cambiamento_stato = -1;
+                buffer_futuri = [];
+                coda = 1;
+            end
+        end
 
-
+    else
+        correct_value = nuovo_campione;
+    end
+end
