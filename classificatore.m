@@ -1,13 +1,13 @@
 % Inizializzazione
 clear 
 close all
-clc
+%clc
 
 %% Impostazioni script e inizializzazione
 
 % ======================== Parametri generali script ======================
 mostra_grafici_segnali = false;                      % Mostra grafici relativi ai segnali pre-classificazione
-mostra_cm = true;                                   % Mostra le CM dei vari classificatori
+mostra_cm = false;                                   % Mostra le CM dei vari classificatori
 mostra_risultati_singoli = false;                   % Mostra confronto singolo classificatore - Ground Truth
 mostra_risultati_complessivi = true;                 % Mostra confronto tutti i classificatori - Ground Truth
 valore_apertura = 1;                                % Valore label apertura
@@ -24,7 +24,7 @@ salva_modelli = false;                               % Salva o meno i modelli al
 percorso_salvataggio = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati"; % Percorso dove salvare i modelli
 
 valuta_validation = false;                           % Esegui valutazione dei vari modelli sul validation set
-valuta_training_completo = false;                    % Esegui valutazione dei vari modelli sul training set completo
+valuta_training_completo = true;                    % Esegui valutazione dei vari modelli sul training set completo
 valuta_test = true;                                 % Esegui valutazione dei vari modelli sul test set
 
 prediction_parallel = false;                         % Esegui il comando predict usando il parfor (parallel pool)
@@ -72,8 +72,10 @@ coding_single = 'onevsall'; % onevsone, onevsall
 
 %  ========================Parametri addestramento NN =====================
 max_epoche = 300;                   % Numero massimo di epoche di allenamento della rete neurale
-val_metrica_obiettivo = 0.005;      % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
+val_metrica_obiettivo = 0.0005;      % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
 train_function = 'trainscg';        % Funzione di training della rete neurale
+layer1 = 5;                         % Numero di neuroni del primo layer
+layer2 = 3;                         % Numero di neuroni del secondo layer
 % =========================================================================
 
 
@@ -332,7 +334,7 @@ if allena_rete_neurale
     % % Addestramento del modello
     % net = trainNetwork(sig_train, label_train, layers, options);
 
-    net = patternnet([10 5], 'trainscg', 'crossentropy');  % Esempio con due hidden layers
+    net = patternnet([layer1 layer2], 'trainscg', 'crossentropy');  % Esempio con due hidden layers
     net.layers{1}.transferFcn = 'tansig';
     net.layers{2}.transferFcn = 'tansig';
     net.layers{3}.transferFcn = 'softmax';
@@ -559,7 +561,7 @@ if valuta_test
     end
 end
 
-%% Rappresentazione complessiva test set
+%% Rappresentazione complessivi test set
 
 if valuta_test
     if mostra_risultati_complessivi
@@ -713,7 +715,7 @@ end
 
 if valuta_training_completo
     if mostra_risultati_complessivi
-        figure;
+        figure()
         subplot(4,1,1);
         plot(prediction_svm_trainC);
         title('Predizioni SVM - training completo');
@@ -772,41 +774,88 @@ if applica_postprocess
 
     % Test funzione 1
     % Chiamata alla funzione per migliorare le etichette
-    prediction_processate = improveClassifierOutput(prediction_nn_test);
+    %prediction_processate = improveClassifierOutput(prediction_nn_test);
+
+    predizione_originale = prediction_nn_trainC;
+    
+    coda = 1;
+    lunghezza_buffer_precedenti = 300;
+    lunghezza_buffer_successivi = 300;
+    buffer_precedenti = [];
+    buffer_futuri = [];
+    cambiamento_stato = 0;
+
+    % Creazione vettore di testing
+    inizio = zeros(lunghezza_buffer_precedenti,1);
+    segnale_nullo = zeros(lunghezza_buffer_precedenti,1);
+    segnale_apertura = ones(50,1);
+
+    %predizione_originale = vertcat(inizio, segnale_nullo, segnale_apertura, segnale_nullo, segnale_nullo);
+    %predizione_originale = vertcat(inizio, segnale_nullo, segnale_apertura, segnale_apertura, segnale_apertura, segnale_apertura, segnale_apertura, segnale_nullo, segnale_nullo);
+    %predizione_originale = vertcat(inizio, segnale_nullo, segnale_apertura, segnale_nullo, segnale_apertura, segnale_apertura, segnale_apertura, segnale_apertura, segnale_nullo, segnale_nullo);
+
+    predizione_processata = zeros(length(predizione_originale),1);
+
+    for index = 1:length(predizione_originale)  % Ciclo for per simulare dati acquisiti live
+        if index < lunghezza_buffer_precedenti+1  % Nel caso live, la variabile di controllo sarebbe il numero di campioni già ricevuti
+            predizione_processata(index) = predizione_originale(index);
+            buffer_precedenti(index) = predizione_originale(index); 
+        elseif index > length(predizione_originale)-lunghezza_buffer_successivi % Questo controllo invece non sarebbe possibile
+            predizione_processata(index) = predizione_originale(index);
+        else % Caso dove si è distante da inizio e fine
+            nuovo_campione = predizione_originale(index);
+            % liveProcess(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, futuri_massimi)
+            [valore_corretto, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, lunghezza_buffer_successivi);
+            if cambiamento_stato ~= 2 && cambiamento_stato ~= -1 && valore_corretto ~= -1
+                predizione_processata(index) = valore_corretto;
+            elseif valore_corretto == -1 && cambiamento_stato == 1 % Caso in cui si sta popolando il vettore_futuri
+                %fprintf("Rilevato cambio valore, valutazione correttezza \n");
+            elseif cambiamento_stato == 2 || cambiamento_stato == -1
+                predizione_processata(index-lunghezza_buffer_successivi:index) = valore_corretto;
+                cambiamento_stato = 0;
+            end
+        end
+    end
 
     figure
-    plot(prediction_nn_test)
+    plot(predizione_originale)
     hold on
-    plot(prediction_processate + 3)
-    legend('Prediction Original', 'Prediction processata')
+    plot(predizione_processata)
+    legend("Predizione originale", "Predizione processata")
+
+    % figure
+    % plot(prediction_nn_test)
+    % hold on
+    % plot(prediction_processate + 3)
+    % legend('Prediction Original', 'Prediction processata')
 
     metodo = "Prediction processate";
     set = "Test";
-    [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate] = evaluaClassificatore(label_test, prediction_processate, mostra_cm, classi, metodo, set);
+    [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate] = evaluaClassificatore(label, predizione_processata, mostra_cm, classi, metodo, set);
     
     %% SVM - rappresentazione dati di test processati
     if mostra_risultati_complessivi
         figure()
         subplot(3,1,1);
-        plot(prediction_nn_test);
+        plot(prediction_nn_trainC);
         title('Predizioni originali');
         xlabel('Campioni');
         ylabel('[a.u.]');
         
         subplot(3,1,2);
-        plot(prediction_processate);
+        plot(predizione_processata);
         title('Predizioni processate');
         xlabel('Campioni');
         ylabel('[a.u.]');
         
         subplot(3,1,3);
-        plot(label_test);
+        plot(label);
         title('Ground truth');
         xlabel('Campioni');
         ylabel('[a.u.]');
         
         % Collega gli assi verticali dei due subplot
-        linkaxes([subplot(2,1,1), subplot(2,1,2)]);
+        linkaxes([subplot(3,1,1), subplot(3,1,2), subplot(3,1,3)]);
     end
 end
 
@@ -902,21 +951,38 @@ function labels = improveClassifierOutput(rawLabels)
 end
 
 % Tentativo mio 2
-% function [correct_value, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda)
-% 
-%     if all(nuovo_campione ~= buffer_precedenti) 
-%             cambiamento_stato = 1;
-%     end
-% 
-%     if cambiamento_stato
-%         if (coda) < length(buffer_precedenti)
-%             buffer_precedenti(coda) = nuovo_campione;
-%             correct_value = -1;
-%         end
-%     else
-% 
-%     end
-% end
+function [correct_value, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, futuri_massimi)
+
+    if all(nuovo_campione ~= buffer_precedenti )
+            cambiamento_stato = 1;
+    end
+
+    if cambiamento_stato
+        if (coda) < futuri_massimi+1                    % Caso in cui il transitorio di osservazione non è ancora finito
+            buffer_futuri(coda) = nuovo_campione;
+            correct_value = -1;                       % In questo modo si segnala che è durante un transitorio
+            buffer_precedenti = buffer_precedenti;    % Il buffer rimane inalterato
+            coda = coda+1;                            % Aggiorna quello che è il contatore degli elementi in coda nel buffer futuro
+
+        else                                          % Caso in cui il transitorio di osservazione è finito
+            if all(buffer_futuri == buffer_futuri(1)) % Indica che tutti i nuovi valori sono coerenti
+                 correct_value = buffer_futuri(1);     % Restituisci il valore corretto
+                 cambiamento_stato = 2;                % Segnala termine controllo con risultati ok
+                 buffer_precedenti = buffer_futuri(end-length(buffer_precedenti)+1:end);
+                 buffer_futuri = [];                 % Resetta il buffer futuri
+                 coda = 1;
+            else
+                correct_value = buffer_precedenti(end);
+                cambiamento_stato = -1;
+                buffer_futuri = [];
+                coda = 1;
+            end
+        end
+
+    else
+        correct_value = nuovo_campione;
+    end
+end
 
 
 
