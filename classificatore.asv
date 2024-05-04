@@ -6,35 +6,32 @@ clc
 %% Impostazioni script e inizializzazione
 
 % ======================== Parametri generali script ======================
-mostra_grafici_segnali = false;                      % Mostra grafici relativi ai segnali pre-classificazione
-mostra_segnale_per_canale = false;
-mostra_cm = false;                                   % Mostra le CM dei vari classificatori
-mostra_risultati_singoli = false;                   % Mostra confronto singolo classificatore - Ground Truth
+mostra_grafici_segnali = true;                      % Mostra grafici relativi ai segnali pre-classificazione
+mostra_segnale_per_canale = true;
+mostra_cm = true;                                   % Mostra le CM dei vari classificatori
+mostra_risultati_singoli = true;                   % Mostra confronto singolo classificatore - Ground Truth
 mostra_risultati_complessivi = true;                 % Mostra confronto tutti i classificatori - Ground Truth
 valore_apertura = 1;                                % Valore label apertura
 valore_chiusura = 2;                                % Valore label chiusura
 classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
 
-allena_svm = false;                                  % Esegui la sezione di addestramento e testing SVM
-allena_lda = false;                                  % Esegui la sezione di addestramento e testing LDA
-allena_rete_neurale = false;                         % Esegui la sezione di addestramento e testing rete neurale
+allena_svm = true;                                  % Esegui la sezione di addestramento e testing SVM
+allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
+allena_rete_neurale = true;                         % Esegui la sezione di addestramento e testing rete neurale
 
 numero_worker = 14;                                 % Numero di worker da usare per il parallel pool
 caricamento_modelli = true;                         % Carica modelli già salvati quando usi il test set
 
-salva_modelli = false;                               % Salva o meno i modelli allenati                           
+salva_modelli = false;                               % Salva i modelli allenati                           
 percorso_salvataggio = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati"; % Percorso dove salvare i modelli
 
-valuta_validation = false;                           % Esegui valutazione dei vari modelli sul validation set
+valuta_validation = true;                           % Esegui valutazione dei vari modelli sul validation set
 valuta_training_completo = true;                    % Esegui valutazione dei vari modelli sul training set completo
 valuta_test = true;                                 % Esegui valutazione dei vari modelli sul test set
 
 prediction_parallel = false;                         % Esegui il comando predict usando il parfor (parallel pool)
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
-
-applica_postprocess = true;                         % Applica funzionid postprocess sul vettore di classificazione
-segnale_da_elaborare = 'prediction_svm_test';
 
 rapporto_training_validation = 0.7;
 % =========================================================================
@@ -71,7 +68,7 @@ opts_hyp = struct('AcquisitionFunctionName', 'expected-improvement-plus', ...
 
 t_single = templateSVM('KernelFunction', 'polynomial', 'PolynomialOrder', 2);
 %t_single = templateSVM('KernelFunction', 'rbf', 'BoxConstraint', 21.344, 'KernelScale', 0.55962); % Valore migliore trovato durante hypertuning automatico, con onevsone
-coding_single = 'onevsall'; % onevsone, onevsall
+coding_single = 'onevsall'; % 'onevsone', 'onevsall'
 % =========================================================================
 
 
@@ -145,6 +142,9 @@ end
 % =========================================================================
 
 % =========================== Parametri postprocess =======================
+applica_postprocess = true;                         % Applica funzion di postprocess sul vettore di classificazione
+segnale_da_elaborare = 'prediction_nn_trainC';
+etichetta_da_elaborare = 'label_trainC';                                
 lunghezza_buffer_precedenti = 400;
 lunghezza_buffer_successivi = 400;
 % =========================================================================
@@ -309,14 +309,14 @@ end
 % Selezione delle porzioni migliori del segnale, in base ad analisi manuale
 inizio_chiusura = 350700-12784;
 end_chiusura = 661996;
-label = [label_apertura(1:end_ind_apertura(end)) , label_chiusura(inizio_chiusura:end_chiusura)]';
+label_trainC  = [label_apertura(1:end_ind_apertura(end)) , label_chiusura(inizio_chiusura:end_chiusura)]';
 
 % Taglio del segnale perché abbia la stessa lunghezza del label
-envelope_std = envelope_std(1:length(label), :);
+envelope_std = envelope_std(1:length(label_trainC), :);
 
 if mostra_grafici_segnali
     figure
-    plot(label)
+    plot(label_trainC)
     hold on
     plot(envelope_std)
     title('Segnale e label finali, post elaborazione');
@@ -335,8 +335,8 @@ validation_idx = index_random(round(rapporto_training_validation*num_samp):end);
 
 sig_train = envelope_std(training_idx,:);
 sig_val = envelope_std(validation_idx,:);
-label_train = label(training_idx,:);
-label_val = label(validation_idx,:);
+label_train = label_trainC(training_idx,:);
+label_val = label_trainC(validation_idx,:);
 
 %% SVM - addestramento
 
@@ -742,7 +742,7 @@ if valuta_test
     if mostra_risultati_singoli
         figure;
         subplot(2,1,1);
-        plot(prediction_test_svm);
+        plot(prediction_svm_test);
         title('Predizioni SVM - test');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -777,7 +777,7 @@ if valuta_test
     if mostra_risultati_singoli
         figure;
         subplot(2,1,1);
-        plot(prediction_test_lda);
+        plot(prediction_lda_tes);
         title('Predizioni LDA - test');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -842,7 +842,7 @@ if valuta_training_completo
     
     metodo = "SVM";
     set = "TrainingCompleto";
-    [CM_svm_trainC, acc_svm_trainC, prec_svm_trainC, spec_svm_trainC, sens_svm_trainC, f1_svm_trainC] = evaluaClassificatore(label, prediction_svm_trainC, mostra_cm, classi, metodo, set);
+    [CM_svm_trainC, acc_svm_trainC, prec_svm_trainC, spec_svm_trainC, sens_svm_trainC, f1_svm_trainC] = evaluaClassificatore(label_trainC, prediction_svm_trainC, mostra_cm, classi, metodo, set);
     
     
     %% SVM - rappresentazione dati di training test completo
@@ -855,7 +855,7 @@ if valuta_training_completo
         ylabel('[a.u.]');
         
         subplot(2,1,2);
-        plot(label);
+        plot(label_trainC);
         title('Ground truth');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -873,20 +873,20 @@ end
 
 if valuta_training_completo
         sig_completo = envelope_std';
-        label = label+1;
-        label = full(ind2vec(label'));
+        label_trainC = label_trainC+1;
+        label_trainC = full(ind2vec(label_trainC'));
     
         prediction_nn_trainC = net(sig_completo);
         prediction_nn_trainC = vec2ind(prediction_nn_trainC);  % Converti le probabilità in indici di classe
     
         % Riporta il valore dei label a quello corretto
-        label = vec2ind(label)';
-        label = label-1;
+        label_trainC = vec2ind(label_trainC)';
+        label_trainC = label_trainC-1;
         prediction_nn_trainC = prediction_nn_trainC'-1; % Riporta alle label convenzionali
         
         metodo = "NN";
         set = "TrainingCompleto";
-        [CM_nn_trainC, acc_nn_trainC, prec_nn_trainC, spec_nn_trainC, sens_nn_trainC, f1_nn_trainC] = evaluaClassificatore(label, prediction_nn_trainC, mostra_cm, classi, metodo, set);
+        [CM_nn_trainC, acc_nn_trainC, prec_nn_trainC, spec_nn_trainC, sens_nn_trainC, f1_nn_trainC] = evaluaClassificatore(label_trainC, prediction_nn_trainC, mostra_cm, classi, metodo, set);
         
 %% NN - rappresentazione dati training set completo
     if mostra_risultati_singoli
@@ -898,7 +898,7 @@ if valuta_training_completo
         ylabel('[a.u.]');
         
         subplot(2,1,2);
-        plot(label);
+        plot(label_trainC);
         title('Ground truth');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -920,7 +920,7 @@ if valuta_training_completo
     
     metodo = "LDA";
     set = "TrainingCompleto";
-    [CM_lda_trainC, acc_lda_trainC, prec_lda_trainC, spec_lda_trainC, sens_lda_trainC, f1_lda_trainC] = evaluaClassificatore(label, prediction_lda_trainC, mostra_cm, classi, metodo, set);
+    [CM_lda_trainC, acc_lda_trainC, prec_lda_trainC, spec_lda_trainC, sens_lda_trainC, f1_lda_trainC] = evaluaClassificatore(label_trainC, prediction_lda_trainC, mostra_cm, classi, metodo, set);
 
     %% LDA - Rappresentazione dati training test completo
     
@@ -933,7 +933,7 @@ if valuta_training_completo
         ylabel('[a.u.]');
         
         subplot(2,1,2);
-        plot(label);
+        plot(label_trainC);
         title('Ground truth');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -967,7 +967,7 @@ if valuta_training_completo
         ylabel('[a.u.]');
         
         subplot(4,1,4);
-        plot(label);
+        plot(label_trainC);
         title('Ground truth');
         xlabel('Campioni');
         ylabel('[a.u.]');
@@ -1004,7 +1004,7 @@ if applica_postprocess
     
     % Definizione segnale da processare - funzione liveProcess
     %predizione_originale = prediction_svm_test;
-    eval(['predizione_originale = ', variable_name, ';']);
+    eval(['predizione_originale = ', segnale_da_elaborare, ';']); % Permette di scegliere tramite la stringa all'inizio il segnale da postprocessare
 
     % Definizione parametri iniziali
     coda = 1;
@@ -1100,9 +1100,13 @@ if applica_postprocess
 
     metodo = "Prediction processate";
     set = "Test";
-    [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate] = evaluaClassificatore(label_test, predizione_processata, mostra_cm, classi, metodo, set);
+
+    eval(['label_process = ', etichetta_da_elaborare, ';']); % Permette di scegliere tramite la stringa all'inizio il segnale da postprocessare
+
+    [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate] = evaluaClassificatore(label_process, predizione_processata, mostra_cm, classi, metodo, set);
     metodo = "Prediction processate 2";
-    [CM_prediction_processate2, acc_prediction_processate2, prec_prediction_processate2, spec_prediction_processate2, sens_prediction_processate2, f1_prediction_processate2] = evaluaClassificatore(label_test, predizione_processata2, mostra_cm, classi, metodo, set);
+    [CM_prediction_processate2, acc_prediction_processate2, prec_prediction_processate2, spec_prediction_processate2, sens_prediction_processate2, f1_prediction_processate2] = evaluaClassificatore(label_process, predizione_processata2, mostra_cm, classi, metodo, set);
+    
     %% SVM - rappresentazione dati di test processati
     if mostra_risultati_complessivi
         figure()
@@ -1125,7 +1129,7 @@ if applica_postprocess
         ylabel('[a.u.]');
         
         subplot(4,1,4);
-        plot(label_test);
+        plot(label_process);
         title('Ground truth');
         xlabel('Campioni');
         ylabel('[a.u.]');
