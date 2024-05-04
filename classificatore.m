@@ -1,12 +1,13 @@
 % Inizializzazione
 clear 
 close all
-%clc
+clc
 
 %% Impostazioni script e inizializzazione
 
 % ======================== Parametri generali script ======================
 mostra_grafici_segnali = false;                      % Mostra grafici relativi ai segnali pre-classificazione
+mostra_segnale_per_canale = false;
 mostra_cm = false;                                   % Mostra le CM dei vari classificatori
 mostra_risultati_singoli = false;                   % Mostra confronto singolo classificatore - Ground Truth
 mostra_risultati_complessivi = true;                 % Mostra confronto tutti i classificatori - Ground Truth
@@ -20,6 +21,7 @@ allena_rete_neurale = false;                         % Esegui la sezione di adde
 
 numero_worker = 14;                                 % Numero di worker da usare per il parallel pool
 caricamento_modelli = true;                         % Carica modelli già salvati quando usi il test set
+
 salva_modelli = false;                               % Salva o meno i modelli allenati                           
 percorso_salvataggio = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati"; % Percorso dove salvare i modelli
 
@@ -30,7 +32,11 @@ valuta_test = true;                                 % Esegui valutazione dei var
 prediction_parallel = false;                         % Esegui il comando predict usando il parfor (parallel pool)
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
+
 applica_postprocess = true;                         % Applica funzionid postprocess sul vettore di classificazione
+segnale_da_elaborare = 'prediction_nn_test';
+
+rapporto_training_validation = 0.7;
 % =========================================================================
 
 
@@ -65,23 +71,68 @@ opts_hyp = struct('AcquisitionFunctionName', 'expected-improvement-plus', ...
 
 t_single = templateSVM('KernelFunction', 'polynomial', 'PolynomialOrder', 2);
 %t_single = templateSVM('KernelFunction', 'rbf', 'BoxConstraint', 21.344, 'KernelScale', 0.55962); % Valore migliore trovato durante hypertuning automatico, con onevsone
-coding_single = 'onevsall'; % onevsone, onevsall
+coding_single = 'onevsall'; % 'onevsone', 'onevsall'
 % =========================================================================
 
 
 
 %  ========================Parametri addestramento NN =====================
-max_epoche = 300;                   % Numero massimo di epoche di allenamento della rete neurale
-val_metrica_obiettivo = 0.0005;      % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
+max_epoche = 500;                   % Numero massimo di epoche di allenamento della rete neurale
+val_metrica_obiettivo = 0.00005;      % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
+        
 train_function = 'trainscg';        % Funzione di training della rete neurale
-layer1 = 5;                         % Numero di neuroni del primo layer
-layer2 = 3;                         % Numero di neuroni del secondo layer
+        % Le funzioni di training possibili sono 
+        % 'trainlm': Rapida discesa, risultati finali simili ma nel test perde complatamente l'aperatura
+        % 'traingd': Discesa del gradiente estremamente lenta, prestazioni scadenti dopo 500 epoche
+        % 'traingdm': Discesa del gradiente più rapida, ma comunque lenta, prestazioni leggermente migliori ma comunque basse
+        % 'traingdx': Discesa del gradiente rapida, da lavorarci meglio
+        % 'trainrp': Discesa del gradiente molto rapida e ottima velocità, da lavorarci meglio
+        % 'trainscg': Criterio benchmark, da seguire come riferimento per il momento
+
+lr = 0.05;
+momentum = 0.9;
+
+neuron_function = 'logsig'; % 'tansig', 'logsig', 'purelin', 'poslin', 'softmax'
+        % 'tansig': 85.09% accuretezza processata, 59.43 peggiore (sensibilità 3)
+        % 'logsig': 86.7% accuratezza processata, 62.77 peggiore (sensibilità 3)
+        % 'purelin': 82.76% accuratezza processata, 55 peggiore (sensibilità 3)
+        % 'poslin': 75.12% accuretezza processata, 45.7 peggiore (sensibilità 3)
+        % 'softmax': no, peggiore
+
+num_layer = 2;
+        % 1  layer da 5: 86.33% accuretazze complessiva (postProcess), 57.54 peggiore (sensibilità 3) 500 epoche
+        % 3 layer (10, 5, 3): 87.8% accuretezza complessiva (postProcess), 64.01 peggiore (sensibilità 3) 500 epoche
+        % 3 layer (10, 5, 3): 86.78% accuretezza complessiva (postProcess), 59.83 peggiore (sensibilità 3) 1000 epoche arrestato prima 
+
+% 5 e 3 ha dato risultati ottimali, finora
+if num_layer == 1
+    layer1 = 5;
+end
+
+if num_layer == 2
+    layer1 = 5;
+    layer2 = 3;
+end
+
+if num_layer == 3
+    layer1 = 10;                     
+    layer2 = 5;                        
+    layer3 = 3;
+end
 % =========================================================================
 
 
 
 % ======================== Parametri addestramento LDA ====================
-discrimType = 'linear'; % quadratic, diaglinear, diagquadratic, pseudolinear, pseudoquadratic
+discrimType = 'quadratic'; % 'linear', 'quadratic', 'diaglinear', 'diagquadratic', 'pseudolinear','pseudoquadratic'
+        % Le metriche qui sotto sono riferite al test set, senza postprocess. Accuratezza complessiva e poi metrica peggiore
+        % 'linear': 75.22%, 48.64 sensibilità 3
+        % 'quadratic': 87.81%, 72.65% sensibilità 2
+        % 'diaglinear': 70.94%, 36.31 sensibilità 2
+        % 'diagquadratic': 75.89%, 47.18 sensibilità 3
+        % 'pseudolinear': 75.25%, 48.66 sensibilità 3
+        % 'pseudoquadratic': 75.25%, 48.62 sensibilità 3
+
 % =========================================================================
 
 % ================= Avvio pool se necessario e non attivo =================
@@ -91,6 +142,11 @@ if prediction_parallel || svm_parameter_hypertuning
             %parpool('Threads')              % Avvia in modalità thread
     end
 end
+% =========================================================================
+
+% =========================== Parametri postprocess =======================
+lunghezza_buffer_precedenti = 400;
+lunghezza_buffer_successivi = 400;
 % =========================================================================
 
 %% Import segnali
@@ -113,13 +169,47 @@ sig = [sig_aperture; sig_chiusura];
 
 n_channel = length(sig(1,:));
 
-% Pre-alloca le matrici
 sig_filt= zeros(length(sig),n_channel);
-
-
 % Filtraggio segnale
 for i=1:n_channel
     sig_filt(:,i) = filter_general(sig(:,i),tipo_filtro,f_sample,"fL",f_taglio_basso,"fH",f_taglio_alta,"fN",f_notch,"visualisation",visualisation);
+end
+
+if mostra_segnale_per_canale
+    figure;
+
+    subplot(5,1,1);
+        plot(sig_filt(:,1));
+        title('Segnale canale 1 grezzo - train');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
+    
+    subplot(5,1,2);
+        plot(sig_filt(:,2));
+        title('Segnale canale 2 grezzo - train');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
+
+    subplot(5,1,3);
+        plot(sig_filt(:,3));
+        title('Segnale canale 3 grezzo - train');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
+
+    subplot(5,1,4);
+        plot(sig_filt(:,4));
+        title('Segnale canale 4 grezzo - train');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
+
+    subplot(5,1,5);
+        plot(sig_filt(:,5));
+        title('Segnale canale 5 grezzo - train');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
+    
+    %Collega gli assi verticali dei due subplot
+    linkaxes([subplot(5,1,1), subplot(5,1,2), subplot(5,1,3), subplot(5,1,4), subplot(5,1,5)]);
 end
 
 envelope = zeros(length(sig_filt),n_channel);
@@ -129,7 +219,7 @@ for i=1:n_channel
 end
 
 if mostra_grafici_segnali
-    figure()
+    figure
     plot(envelope)
     title('Inviluppo segnale grezzo');
     xlabel('Campioni');
@@ -139,11 +229,48 @@ end
 % Standardizza i valori
 envelope_std = (envelope-mean(envelope))./std(envelope);
 
+if mostra_segnale_per_canale
+    figure;
+
+    subplot(5,1,1);
+        plot(envelope_std(:,1));
+        title('Segnale canale 1 inviluppato e standardizzato - train');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
+    
+    subplot(5,1,2);
+        plot(envelope_std(:,2));
+        title('Segnale canale 2 inviluppato e standardizzato - train');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
+
+    subplot(5,1,3);
+        plot(envelope_std(:,3));
+        title('Segnale canale 3 inviluppato e standardizzato - train');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
+
+    subplot(5,1,4);
+        plot(envelope_std(:,4));
+        title('Segnale canale 4 inviluppato e standardizzato - train');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
+
+    subplot(5,1,5);
+        plot(envelope_std(:,5));
+        title('Segnale canale 5 inviluppato e standardizzato - train');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
+    
+    %Collega gli assi verticali dei due subplot
+    linkaxes([subplot(5,1,1), subplot(5,1,2), subplot(5,1,3), subplot(5,1,4), subplot(5,1,5)]);
+end
+
 % Istruzione per usare il segnale senza inviluppo
 %envelope_std = (sig_filt-mean(sig_filt))./std(sig_filt);
 
 if mostra_grafici_segnali
-    figure()
+    figure
     plot(envelope_std)
     hold on
 end
@@ -170,6 +297,7 @@ n = end_ind_chiusura(end);  % Lunghezza del vettore label chiusure da creare
 label_chiusura = creaEtichetta(n, start_indices_chiusura, end_ind_chiusura, valore_chiusura);
 
 if mostra_grafici_segnali
+    figure
     plot(label_apertura)
     hold on
     plot(label_chiusura)
@@ -187,7 +315,7 @@ label = [label_apertura(1:end_ind_apertura(end)) , label_chiusura(inizio_chiusur
 envelope_std = envelope_std(1:length(label), :);
 
 if mostra_grafici_segnali
-    figure()
+    figure
     plot(label)
     hold on
     plot(envelope_std)
@@ -202,8 +330,8 @@ end
 % Creazione indici per training e test
 num_samp = length(envelope_std(:,1));
 index_random = randperm(num_samp);
-training_idx = index_random(1:round(0.7*num_samp));
-validation_idx = index_random(round(0.7*num_samp):end);
+training_idx = index_random(1:round(rapporto_training_validation*num_samp));
+validation_idx = index_random(round(rapporto_training_validation*num_samp):end);
 
 sig_train = envelope_std(training_idx,:);
 sig_val = envelope_std(validation_idx,:);
@@ -215,7 +343,6 @@ label_val = label(validation_idx,:);
 if allena_svm
 
     if svm_parameter_hypertuning
-        
         % Selezione se GPU o CPU
         if svm_calcolo_GPU
             % Trasferimento dei dati sulla GPU
@@ -231,12 +358,10 @@ if allena_svm
         if svm_calcolo_GPU
             % Trasferimento dei dati sulla GPU
             gpu_sig_train = gpuArray(sig_train);
-            gpu_label_train = gpuArray(label_train);
-            %svm_model = fitcecoc(gpu_sig_train,gpu_label_train, 'Learners', t_single, 'Coding', coding_single, 'ClassNames', classi); 
+            gpu_label_train = gpuArray(label_train); 
             svm_model = fitcecoc(gpu_sig_train,gpu_label_train, 'Learners', t_single, 'Coding', coding_single); 
             svm_model = gather(svm_model);
         else
-            %svm_model = fitcecoc(sig_train,label_train, 'Learners', t_single, 'Coding', coding_single, 'ClassNames', classi);
             svm_model = fitcecoc(sig_train,label_train, 'Learners', t_single, 'Coding', coding_single);
         end
     end
@@ -253,11 +378,10 @@ if caricamento_modelli
 end
 
 if valuta_validation
-    %
     
     if prediction_parallel
         numData = size(sig_val, 1);
-        prediction_svm_validation = zeros(numData, 1);  % Preallocazione del vettore delle predizioni
+        prediction_svm_validation = zeros(numData, 1);  
         parfor i = 1:numData
             prediction_svm_validation(i) = predict(svm_model, sig_val(i, :));
         end
@@ -273,7 +397,6 @@ end
 %% LDA - addestramento
 
 if allena_lda
-    %lda_model = fitcdiscr(sig_train,label_train,  'DiscrimType', discrimType, 'ClassNames', classi);
     lda_model = fitcdiscr(sig_train,label_train,  'DiscrimType', discrimType);
     
     % Visualizza i coefficienti del modello
@@ -282,7 +405,6 @@ if allena_lda
 
     if salva_modelli
         % Salva il modello allenato in un file .mat
-        %save('lda_model.mat', 'lda_model');
         save(fullfile(percorso_salvataggio, 'lda_model.mat'), 'lda_model');
     end
 end    
@@ -310,7 +432,7 @@ end
 %% Rete neurale - addestramento
 
 if allena_rete_neurale
-    % Definizione architettura - sistema completo
+    % Definizione architettura - sistema completo ma non testato
     % layers = [
     %     sequenceInputLayer(5)
     %     convolution1dLayer(5, 10, 'Padding', 'same')
@@ -334,33 +456,69 @@ if allena_rete_neurale
     % % Addestramento del modello
     % net = trainNetwork(sig_train, label_train, layers, options);
 
-    net = patternnet([layer1 layer2], 'trainscg', 'crossentropy');  % Esempio con due hidden layers
-    net.layers{1}.transferFcn = 'tansig';
-    net.layers{2}.transferFcn = 'tansig';
-    net.layers{3}.transferFcn = 'softmax';
+    % Versione 1 layer
+    if num_layer == 1
+        net = patternnet(layer1, train_function, 'crossentropy');  % Rete con un solo hidden layer
+        net.layers{1}.transferFcn = neuron_function;   % Funzione di trasferimento del layer nascosto
+        net.layers{2}.transferFcn = 'softmax';  % Funzione di trasferimento del layer di output
+        
+        net.trainFcn = train_function;  
+        net.trainParam.epochs = max_epoche;
+        net.trainParam.goal = val_metrica_obiettivo;
+        if strcmp(train_function, 'traingdx')  
+            net.trainParam.lr = lr;
+            net.trainParam.mc = momentum;
+        end
+    end
 
-    net.trainFcn = train_function;  % Conjugate gradient
-    net.trainParam.epochs = max_epoche;
-    net.trainParam.goal = val_metrica_obiettivo;
-    %net.trainParam.useGPU = 'yes';  % Abilita l'uso della GPU
+    % Versione 2 layer
+    if num_layer == 2
+        net = patternnet([layer1 layer2], train_function, 'crossentropy');  
+        net.layers{1}.transferFcn = neuron_function;
+        net.layers{2}.transferFcn = neuron_function;
+        net.layers{3}.transferFcn = 'softmax';
+    
+        net.trainFcn = train_function;  
+        net.trainParam.epochs = max_epoche;
+        net.trainParam.goal = val_metrica_obiettivo;
+        if strcmp(train_function, 'traingdx')
+            net.trainParam.lr = lr;
+            net.trainParam.mc = momentum;
+        end
+    end
+
+    % Versione 3 layer
+    if num_layer == 3
+        net = patternnet([layer1 layer2 layer3], train_function, 'crossentropy');  
+        net.layers{1}.transferFcn = neuron_function;
+        net.layers{2}.transferFcn = neuron_function;
+        net.layers{3}.transferFcn = neuron_function;   
+        net.layers{4}.transferFcn = 'softmax';  
+        
+        net.trainFcn = train_function;  
+        net.trainParam.epochs = max_epoche;
+        net.trainParam.goal = val_metrica_obiettivo;
+        if strcmp(train_function, 'traingdx') 
+            net.trainParam.lr = lr;
+            net.trainParam.mc = momentum;
+        end
+    end
 
     % Comandi per gestire automaticamente la gestione dell'intero dataset
     % net.divideParam.trainRatio = 70/100;
     % net.divideParam.valRatio = 15/100;
     % net.divideParam.testRatio = 15/100;
     
-    %sig_train = sig_train(:, 1:length(label_train));
-    sig_train = sig_train'; % Trasposizione per come lavora matlab
+    % Adattamento segnali e label a formato rete
+    sig_train = sig_train'; % Trasposizione per adattare a necessità rete
     label_train = label_train+1;
-    
     label_train = full(ind2vec(label_train'));  % Converti in formato one-hot e trasponi
 
-
+    % Allena
     [net, tr] = train(net, sig_train, label_train);
 
     if salva_modelli
             % Salva il modello allenato in un file .mat
-            %save('nn_model.mat', 'net');
             save(fullfile(percorso_salvataggio, 'nn_model.mat'), 'net');
     end
 end
@@ -381,7 +539,7 @@ if valuta_validation
 
     % Ripristina label corrette
     label_val = vec2ind(label_val)';
-    label_val = label_val-1;
+    label_val = label_val-1; % Elimina il valore aggiunto in fase di conversione per rete
     prediction_nn_validation = prediction_nn_validation'-1; % Riporta alle label convenzionali
     
     metodo = "NN";
@@ -412,11 +570,48 @@ if valuta_test
         sig_filt_test(:,i) = filter_general(sig_test(:,i),tipo_filtro,f_sample,"fL",f_taglio_basso,"fH",f_taglio_alta,"fN",f_notch,"visualisation",visualisation);
     end
     
+    if mostra_segnale_per_canale
+        figure;
+    
+        subplot(5,1,1);
+            plot(sig_filt_test(:,1));
+            title('Segnale canale 1 grezzo - test');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+        
+        subplot(5,1,2);
+            plot(sig_filt_test(:,2));
+            title('Segnale canale 2 grezzo - test');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,3);
+            plot(sig_filt_test(:,3));
+            title('Segnale canale 3 grezzo - test');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,4);
+            plot(sig_filt_test(:,4));
+            title('Segnale canale 4 grezzo - test');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,5);
+            plot(sig_filt_test(:,5));
+            title('Segnale canale 5 grezzo - test');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+        
+        %Collega gli assi verticali dei due subplot
+        linkaxes([subplot(5,1,1), subplot(5,1,2), subplot(5,1,3), subplot(5,1,4), subplot(5,1,5)]);
+    end
+
     % Creazione inviluppo
     for i=1:n_channel
         envelope_test(:,i) = filter_general(abs(sig_filt_test(:,i)),tipo_filtro,f_sample,"fH",f_envelope,"percH",percH);  
     end
-    
+
     if mostra_grafici_segnali
         figure()
         plot(envelope_test)
@@ -429,7 +624,44 @@ if valuta_test
     envelope_std_test = (envelope_test-mean(envelope_test))./std(envelope_test);
     %envelope_std_test = envelope_std_test(1:end-1);
     
-    label_test = [label_test; 0];
+    if mostra_segnale_per_canale
+        figure;
+    
+        subplot(5,1,1);
+            plot(envelope_std_test(:,1));
+            title('Segnale canale 1 inviluppato e standardizzato - test');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+        
+        subplot(5,1,2);
+            plot(envelope_std_test(:,2));
+            title('Segnale canale 2 inviluppato e standardizzato - test');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,3);
+            plot(envelope_std_test(:,3));
+            title('Segnale canale 3 inviluppato e standardizzato - test');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,4);
+            plot(envelope_std_test(:,4));
+            title('Segnale canale 4 inviluppato e standardizzato - test ');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,5);
+            plot(envelope_std_test(:,5));
+            title('Segnale canale 5 inviluppato e standardizzato - test');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+        
+        %Collega gli assi verticali dei due subplot
+        linkaxes([subplot(5,1,1), subplot(5,1,2), subplot(5,1,3), subplot(5,1,4), subplot(5,1,5)]);
+    end
+
+    label_test = [label_test; 0]; % Mancava un'etichetta
     
     if mostra_grafici_segnali
         figure()
@@ -715,7 +947,7 @@ end
 
 if valuta_training_completo
     if mostra_risultati_complessivi
-        figure()
+        figure;
         subplot(4,1,1);
         plot(prediction_svm_trainC);
         title('Predizioni SVM - training completo');
@@ -746,7 +978,10 @@ if valuta_training_completo
 end
 
 %% SVM - applicazione postprocess per migliorare i risultati
+% Dai test preliminari, direi che la funzione migliore per il postprocess è liveprocess
+
 if applica_postprocess
+
     % TENTATIVO CON FILTRO, NON SMUSSA ABBASTANZA
     % fc = 4;
     % ordine = 6;
@@ -761,35 +996,26 @@ if applica_postprocess
     % plot(prediction_test_svm)
     % hold on
     % plot(prediction_filtered)
-    
-    % Tentativo usando funzione che potrebbe essere usata live
 
-    %lunghezza_precedenti = 1;
-    %lunghezza_futuri = 200;    % Equivale a 100 ms
-
-    %buffer_precedenti = zeros(1,lunghezza_precedenti);
-    %buffer_futuri= zeros(1,lunghezza_futuri);
-
-    % La gestione dei bordi è affidata al ciclo sul vettore
-
-    % Test funzione 1
-    % Chiamata alla funzione per migliorare le etichette
+    % Funzione che lavora sull'intero vettore
     %prediction_processate = improveClassifierOutput(prediction_nn_test);
 
-    predizione_originale = prediction_nn_test;
+    % Funzione per lavorare live
     
+    % Definizione segnale da processare - funzione liveProcess
+    %predizione_originale = prediction_svm_test;
+    eval(['predizione_originale = ', segnale_da_elaborare, ';']); % Permette di scegliere tramite la stringa all'inizio il segnale da postprocessare
+
+    % Definizione parametri iniziali
     coda = 1;
-    lunghezza_buffer_precedenti = 400;
-    lunghezza_buffer_successivi = 400;
     buffer_precedenti = [];
     buffer_futuri = [];
     cambiamento_stato = 0;
 
-    % Creazione vettore di testing
-    inizio = zeros(lunghezza_buffer_precedenti,1);
-    segnale_nullo = zeros(lunghezza_buffer_precedenti,1);
-    segnale_apertura = ones(50,1);
-
+    % Creazione vettore di testing - solo per debug
+    % inizio = zeros(lunghezza_buffer_precedenti,1);
+    % segnale_nullo = zeros(lunghezza_buffer_precedenti,1);
+    % segnale_apertura = ones(50,1);
     %predizione_originale = vertcat(inizio, segnale_nullo, segnale_apertura, segnale_nullo, segnale_nullo);
     %predizione_originale = vertcat(inizio, segnale_nullo, segnale_apertura, segnale_apertura, segnale_apertura, segnale_apertura, segnale_apertura, segnale_nullo, segnale_nullo);
     %predizione_originale = vertcat(inizio, segnale_nullo, segnale_apertura, segnale_nullo, segnale_apertura, segnale_apertura, segnale_apertura, segnale_apertura, segnale_nullo, segnale_nullo);
@@ -800,68 +1026,119 @@ if applica_postprocess
         if index < lunghezza_buffer_precedenti+1  % Nel caso live, la variabile di controllo sarebbe il numero di campioni già ricevuti
             predizione_processata(index) = predizione_originale(index);
             buffer_precedenti(index) = predizione_originale(index); 
+        
         elseif index > length(predizione_originale)-lunghezza_buffer_successivi % Questo controllo invece non sarebbe possibile
             predizione_processata(index) = predizione_originale(index);
+        
         else % Caso dove si è distante da inizio e fine
             nuovo_campione = predizione_originale(index);
-            % liveProcess(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, futuri_massimi)
-            [valore_corretto, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess2(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, lunghezza_buffer_successivi);
+            [valore_corretto, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, lunghezza_buffer_successivi);
+            
             if cambiamento_stato ~= 2 && cambiamento_stato ~= -1 && valore_corretto ~= -1
                 predizione_processata(index) = valore_corretto;
+            
             elseif valore_corretto == -1 && cambiamento_stato == 1 % Caso in cui si sta popolando il vettore_futuri
                 %fprintf("Rilevato cambio valore, valutazione correttezza \n");
+            
             elseif cambiamento_stato == 2 || cambiamento_stato == -1
                 predizione_processata(index-lunghezza_buffer_successivi:index) = valore_corretto;
                 cambiamento_stato = 0;
             end
         end
     end
+    
+    % Definizione parametri iniziali
+    coda = 1;
+    buffer_precedenti = [];
+    buffer_futuri = [];
+    cambiamento_stato = 0;
 
-    figure
-    plot(predizione_originale)
-    hold on
-    plot(predizione_processata)
-    legend("Predizione originale", "Predizione processata")
+    % Creazione vettore di testing - solo per debug
+    % inizio = zeros(lunghezza_buffer_precedenti,1);
+    % segnale_nullo = zeros(lunghezza_buffer_precedenti,1);
+    % segnale_apertura = ones(50,1);
+    %predizione_originale = vertcat(inizio, segnale_nullo, segnale_apertura, segnale_nullo, segnale_nullo);
+    %predizione_originale = vertcat(inizio, segnale_nullo, segnale_apertura, segnale_apertura, segnale_apertura, segnale_apertura, segnale_apertura, segnale_nullo, segnale_nullo);
+    %predizione_originale = vertcat(inizio, segnale_nullo, segnale_apertura, segnale_nullo, segnale_apertura, segnale_apertura, segnale_apertura, segnale_apertura, segnale_nullo, segnale_nullo);
 
-    % figure
-    % plot(prediction_nn_test)
-    % hold on
-    % plot(prediction_processate + 3)
-    % legend('Prediction Original', 'Prediction processata')
+    predizione_processata2 = zeros(length(predizione_originale),1);
+
+    for index = 1:length(predizione_originale)  % Ciclo for per simulare dati acquisiti live
+        if index < lunghezza_buffer_precedenti+1  % Nel caso live, la variabile di controllo sarebbe il numero di campioni già ricevuti
+            predizione_processata2(index) = predizione_originale(index);
+            buffer_precedenti(index) = predizione_originale(index); 
+        
+        elseif index > length(predizione_originale)-lunghezza_buffer_successivi % Questo controllo invece non sarebbe possibile
+            predizione_processata2(index) = predizione_originale(index);
+        
+        else % Caso dove si è distante da inizio e fine
+            nuovo_campione = predizione_originale(index);
+            [valore_corretto, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess2(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, lunghezza_buffer_successivi);
+            
+            if cambiamento_stato ~= 2 && cambiamento_stato ~= -1 && valore_corretto ~= -1
+                predizione_processata2(index) = valore_corretto;
+            
+            elseif valore_corretto == -1 && cambiamento_stato == 1 % Caso in cui si sta popolando il vettore_futuri
+                %fprintf("Rilevato cambio valore, valutazione correttezza \n");
+            
+            elseif cambiamento_stato == 2 || cambiamento_stato == -1
+                predizione_processata2(index-lunghezza_buffer_successivi:index) = valore_corretto;
+                cambiamento_stato = 0;
+            end
+        end
+    end
+
+    if mostra_risultati_singoli
+        figure
+        plot(predizione_originale)
+        hold on
+        plot(predizione_processata)
+        hold on
+        plot(predizione_processata2)
+        legend("Predizione originale", "Predizione processata", "Predizione processata 2")
+    end
 
     metodo = "Prediction processate";
     set = "Test";
     [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate] = evaluaClassificatore(label_test, predizione_processata, mostra_cm, classi, metodo, set);
+    metodo = "Prediction processate 2";
+    [CM_prediction_processate2, acc_prediction_processate2, prec_prediction_processate2, spec_prediction_processate2, sens_prediction_processate2, f1_prediction_processate2] = evaluaClassificatore(label_test, predizione_processata2, mostra_cm, classi, metodo, set);
     
     %% SVM - rappresentazione dati di test processati
     if mostra_risultati_complessivi
         figure()
-        subplot(3,1,1);
+        subplot(4,1,1);
         plot(predizione_originale);
         title('Predizioni originali');
         xlabel('Campioni');
         ylabel('[a.u.]');
         
-        subplot(3,1,2);
+        subplot(4,1,2);
         plot(predizione_processata);
         title('Predizioni processate');
         xlabel('Campioni');
         ylabel('[a.u.]');
+
+        subplot(4,1,3);
+        plot(predizione_processata2);
+        title('Predizioni processate 2');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
         
-        subplot(3,1,3);
+        subplot(4,1,4);
         plot(label_test);
         title('Ground truth');
         xlabel('Campioni');
         ylabel('[a.u.]');
         
         % Collega gli assi verticali dei due subplot
-        linkaxes([subplot(3,1,1), subplot(3,1,2), subplot(3,1,3)]);
+        linkaxes([subplot(4,1,1), subplot(4,1,2), subplot(4,1,3), subplot(4,1,4)]);
     end
 end
 
 %% Funzioni usate
 function vec = creaEtichetta(n, start_indices, end_indices, value)
-    % Inizializza il vettore di zeri
+    
     vec = zeros(1, n);
     
     % Imposta il valore numerico agli elementi tra gli indici di inizio e fine
@@ -871,10 +1148,9 @@ function vec = creaEtichetta(n, start_indices, end_indices, value)
 end
 
 function [CM, accuratezza, precisione, specificita, sensibilita, f1Score] = evaluaClassificatore(label_val, prediction, mostra_cm, classi, nomeMetodo, nomeSet)
-    % Calcolo della matrice di confusione
+    
     CM = confusionmat(label_val, prediction);
 
-    % Visualizzazione della confusion matrix se richiesto
     if mostra_cm
         figure();
         confusionchart(CM, classi);
@@ -919,11 +1195,7 @@ function [CM, accuratezza, precisione, specificita, sensibilita, f1Score] = eval
     fprintf('\n---------------------------\n');
 end
 
-
-% Da qui sotto sono tutti i vari test sulle funzioni di post, non guardare
-
-
-% Questo funziona ma solo offline, con intero vettore
+% Funzione per postprocess sull'intero vettore
 function labels = improveClassifierOutput(rawLabels)
     threshold = 400;        % Soglia di campioni
     n = length(rawLabels);  % Numero totale di etichette
@@ -950,7 +1222,8 @@ function labels = improveClassifierOutput(rawLabels)
     return
 end
 
-% Tentativo mio 2
+% Tentativo 2
+
 function [correct_value, cambiamento_stato, buffer_precedenti, buffer_futuri, coda] = liveProcess(buffer_precedenti, buffer_futuri, nuovo_campione, cambiamento_stato, coda, futuri_massimi)
 
     if all(nuovo_campione ~= buffer_precedenti )
@@ -958,7 +1231,7 @@ function [correct_value, cambiamento_stato, buffer_precedenti, buffer_futuri, co
     end
 
     if cambiamento_stato
-        if (coda) < futuri_massimi+1                    % Caso in cui il transitorio di osservazione non è ancora finito
+        if (coda) < futuri_massimi+1                  % Caso in cui il transitorio di osservazione non è ancora finito
             buffer_futuri(coda) = nuovo_campione;
             correct_value = -1;                       % In questo modo si segnala che è durante un transitorio
             buffer_precedenti = buffer_precedenti;    % Il buffer rimane inalterato
@@ -966,13 +1239,13 @@ function [correct_value, cambiamento_stato, buffer_precedenti, buffer_futuri, co
 
         else                                          % Caso in cui il transitorio di osservazione è finito
             if all(buffer_futuri == buffer_futuri(1)) % Indica che tutti i nuovi valori sono coerenti
-                 correct_value = buffer_futuri(1);     % Restituisci il valore corretto
-                 cambiamento_stato = 2;                % Segnala termine controllo con risultati ok
+                 correct_value = buffer_futuri(1);    % Restituisci il valore corretto
+                 cambiamento_stato = 2;               % Segnala termine controllo con risultati ok
                  buffer_precedenti = buffer_futuri(end-length(buffer_precedenti)+1:end);
-                 buffer_futuri = [];                 % Resetta il buffer futuri
+                 buffer_futuri = [];                  % Resetta il buffer_futuri
                  coda = 1;
             else
-                correct_value = buffer_precedenti(end);
+                correct_value = buffer_precedenti(end); % Caso in cui i nuovi valori non sono coerenti, restituisce l'ultimo prima del cambiamento
                 cambiamento_stato = -1;
                 buffer_futuri = [];
                 coda = 1;
@@ -991,7 +1264,7 @@ function [correct_value, cambiamento_stato, buffer_precedenti, buffer_futuri, co
     end
 
     if cambiamento_stato
-        if (coda) < futuri_massimi+1                    % Caso in cui il transitorio di osservazione non è ancora finito
+        if (coda) < futuri_massimi+1                  % Caso in cui il transitorio di osservazione non è ancora finito
             buffer_futuri(coda) = nuovo_campione;
             correct_value = -1;                       % In questo modo si segnala che è durante un transitorio
             buffer_precedenti = buffer_precedenti;    % Il buffer rimane inalterato
@@ -999,14 +1272,14 @@ function [correct_value, cambiamento_stato, buffer_precedenti, buffer_futuri, co
 
         else                                          % Caso in cui il transitorio di osservazione è finito
             if all(buffer_futuri == buffer_futuri(1)) % Indica che tutti i nuovi valori sono coerenti
-                 %correct_value = buffer_futuri(1);     % Restituisci il valore corretto
-                 correct_value = mode(buffer_futuri);
-                 cambiamento_stato = 2;                % Segnala termine controllo con risultati ok
+                 correct_value = mode(buffer_futuri); % Restituisci il valore corretto dato dalla moda presente nel buffer_futuri, ovvero si considera corretto il valore più frequente dopo il cambio
+                 cambiamento_stato = 2;               % Segnala termine controllo con risultati ok
                  buffer_precedenti = buffer_futuri(end-length(buffer_precedenti)+1:end);
                  buffer_futuri = [];                 % Resetta il buffer futuri
                  coda = 1;
             else
-                correct_value = buffer_precedenti(end);
+                %correct_value = buffer_precedenti(end); % Caso in cui i nuovi valori non sono coerenti, restituisce l'ultimo prima del cambiamento
+                correct_value = mode(buffer_futuri); % Restituisci il valore corretto dato dalla moda presente nel buffer_futuri, ovvero si considera corretto il valore più frequente dopo il cambio
                 cambiamento_stato = -1;
                 buffer_futuri = [];
                 coda = 1;
