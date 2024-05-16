@@ -3,6 +3,14 @@ clear
 close all
 clc
 
+%% N.B.
+% QUANDO SI TESTA UN SEGNALE SETTARE IL PARAMETRO RELATIVO AL PREPROCESS
+% (RIGA 24) IN MANIERA OPPORTUNA, ALTRIMENTI I RISULTATI SARANNO ERRATI
+% Per esempio: 
+% - training e del validation set: preprocessa_segnale = false
+% - test_set: prerprocessa_segnale = true
+
+
 %% ======================== Parametri generali script ======================
 mostra_grafici_segnali = false;  
 mostra_segnale_per_canale = false;
@@ -14,7 +22,7 @@ classi = {'Rilassata', 'Apertura','Chiusura'};       % Nomi assegnati alle class
 
 percorso_segnale = "Prepared_data/test_set.mat";
 percorso_label = "Prepared_data/label_test.mat";
-nome_grafici = "Test set";                           % Nome che viene mostrato nei grafici relativi ai risultati
+nome_grafici = "Validation set";                           % Nome che viene mostrato nei grafici relativi ai risultati
 
 preprocessa_segnale = true;
 
@@ -26,11 +34,11 @@ warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning
 
 %% Selezione valutazioni da eseguire
 
-valuta_svm = false;
+valuta_svm = true;
 valuta_lda = true;
 valuta_nn = true;
 
-percorso_salvataggio_svm = "Modelli_allenati\svm_model.mat";
+percorso_salvataggio_svm = "Modelli_allenati_addestramento\svm_model.mat";
 percorso_salvataggio_lda = "Modelli_allenati_addestramento\lda_model.mat";
 percorso_salvataggio_nn = "Modelli_allenati_addestramento\nn_model.mat";
 

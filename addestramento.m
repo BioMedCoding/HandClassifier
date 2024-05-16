@@ -5,7 +5,7 @@ clc
 
 
 %% ======================== Parametri generali script ======================
-mostra_grafici_segnali = false;                      % Mostra grafici relativi ai segnali pre-classificazione
+mostra_grafici_segnali = true;                      % Mostra grafici relativi ai segnali pre-classificazione
 mostra_segnale_per_canale = false;
 
 percorso_dati_aperture = "Original_data/aperture.txt";
@@ -16,17 +16,20 @@ valore_apertura = 1;                                % Valore label apertura
 valore_chiusura = 2;                                % Valore label chiusura
 classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
 
-allena_svm = false;                                  % Esegui la sezione di addestramento e testing SVM
+allena_svm = true;                                  % Esegui la sezione di addestramento e testing SVM
 allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
 allena_rete_neurale = true; 
 
 rapporto_training_validation = 0.7;
-salvataggio_train_val = true;
 numero_worker = 14; 
 
-salva_modelli = true;                               % Salva i modelli allenati                           
+salva_modelli = true;                               % Salva i modelli allenati      
+salvataggio_train_val = true;                       % Salva matrici contenenti training e validation set
+salvataggio_dataset_completo = false;               % Salva matrice contenente il dataset completo (già effettuato, pertanto disattivato)
+
 percorso_salvataggio_modelli = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento"; % Percorso dove salvare i modelli
 percorso_salvataggio_train_val = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data";
+percorso_salvataggio_dataset_completo = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data";
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 
@@ -64,9 +67,9 @@ opts_hyp = struct('AcquisitionFunctionName', 'expected-improvement-plus', ...
     'SaveIntermediateResults', true, ...                           
     'MaxTime', ore_esecuzione_massime*3600);                       
 
-t_single = templateSVM('KernelFunction', 'polynomial', 'PolynomialOrder', 2);
-%t_single = templateSVM('KernelFunction', 'rbf', 'BoxConstraint', 21.344, 'KernelScale', 0.55962); % Valore migliore trovato durante hypertuning automatico, con onevsone
-coding_single = 'onevsall'; % 'onevsone', 'onevsall'
+%t_single = templateSVM('KernelFunction', 'polynomial', 'PolynomialOrder', 2);
+t_single = templateSVM('KernelFunction', 'rbf', 'BoxConstraint', 21.344, 'KernelScale', 0.55962); % Valore migliore trovato durante hypertuning automatico, con onevsone
+coding_single = 'onevsone'; % 'onevsone', 'onevsall'
 %% =========================================================================
 
 
@@ -284,6 +287,11 @@ if mostra_grafici_segnali
     plot(envelope_std)
     hold on
 end
+
+% Salvataggio dataset completo
+% if salvataggio_dataset_completo
+%     save(strcat(percorso_salvataggio_dataset_completo,"/dataset_completo"), "envelope_std")
+% end
 
 %% Caricamento label segnale di training
 
