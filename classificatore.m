@@ -356,10 +356,10 @@ label_train = label_trainC(training_idx,:);
 label_val = label_trainC(validation_idx,:);
 
 % Salvataggio training e validation set
-save("Prepared_data/training_set", "sig_train")
-save("Prepared_data/validation_set", "sig_val")
-save("Prepared_data/label_training", "label_train")
-save("Prepared_data/label_validation", "label_val")
+%save("Prepared_data/training_set", "sig_train")
+%save("Prepared_data/validation_set", "sig_val")
+%save("Prepared_data/label_training", "label_train")
+%save("Prepared_data/label_validation", "label_val")
 
 pause
 

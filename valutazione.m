@@ -12,11 +12,11 @@ mostra_risultati_complessivi = true;                 % Mostra confronto tutti i 
 
 classi = {'Rilassata', 'Apertura','Chiusura'};       % Nomi assegnati alle classi
 
-percorso_segnale = "Prepared_data/dataset_completo_processato.mat";
-percorso_label = "Prepared_data/label_dataset_completo";
+percorso_segnale = "Prepared_data/test_set.mat";
+percorso_label = "Prepared_data/label_test.mat";
 nome_grafici = "Test set";                           % Nome che viene mostrato nei grafici relativi ai risultati
 
-preprocessa_segnale = false;
+preprocessa_segnale = true;
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 %% =========================================================================
@@ -26,13 +26,13 @@ warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning
 
 %% Selezione valutazioni da eseguire
 
-valuta_svm = true;
+valuta_svm = false;
 valuta_lda = true;
 valuta_nn = true;
 
 percorso_salvataggio_svm = "Modelli_allenati\svm_model.mat";
-percorso_salvataggio_lda = "Modelli_allenati\lda_model.mat";
-percorso_salvataggio_nn = "Modelli_allenati\nn_model.mat";
+percorso_salvataggio_lda = "Modelli_allenati_addestramento\lda_model.mat";
+percorso_salvataggio_nn = "Modelli_allenati_addestramento\nn_model.mat";
 
 prediction_parallel = false;
 %% =========================================================================
@@ -56,9 +56,8 @@ visualisation = "no";                               % Mostra grafici filtraggio
 % =========================== Parametri postprocess =======================
 applica_postprocess_multiplo = true;                         % Applica funzion di postprocess sul vettore di classificazione
 
-applica_postprocess_singolo = false;
-segnale_da_elaborare = 'prediction_nn_test';
-etichetta_da_elaborare = 'Processed_data/label_test';                                
+applica_postprocess_singolo = true;
+segnale_da_elaborare = 'prediction_nn_test';                             
 
 lunghezza_buffer_precedenti = 400;
 lunghezza_buffer_successivi = 400;
@@ -226,6 +225,7 @@ end
 %% Valutazione SVM
 
 if valuta_svm
+
     load(percorso_salvataggio_svm)
     metodo = "SVM";
     set = nome_grafici;
@@ -263,6 +263,8 @@ if valuta_lda
 
     load(percorso_salvataggio_lda)
     metodo = "LDA";
+    set = nome_grafici;
+
     prediction_lda_test = predict(lda_model, test_signal);
 
     [CM_lda_test, acc_lda_test, prec_lda_test, spec_lda_test, sens_lda_test, f1_lda_test] = evaluaClassificatore(label_test, prediction_lda_test, mostra_cm, classi, metodo, set);
@@ -290,6 +292,8 @@ end
 if valuta_nn
 
     load(percorso_salvataggio_nn)
+
+    set = nome_grafici;
 
     % Adatta segnali al formato richiesto dalla rete neurale
     test_signal = test_signal';
@@ -454,11 +458,9 @@ if applica_postprocess_singolo
     metodo = "Prediction processate";
     set = "Test";
 
-    eval(['label_process = ', etichetta_da_elaborare, ';']); % Permette di scegliere tramite la stringa all'inizio il segnale da postprocessare
-
-    [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate] = evaluaClassificatore(label_process, predizione_processata, mostra_cm, classi, metodo, set);
+    [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate] = evaluaClassificatore(label_test, predizione_processata, mostra_cm, classi, metodo, set);
     metodo = "Prediction processate 2";
-    [CM_prediction_processate2, acc_prediction_processate2, prec_prediction_processate2, spec_prediction_processate2, sens_prediction_processate2, f1_prediction_processate2] = evaluaClassificatore(label_process, predizione_processata2, mostra_cm, classi, metodo, set);
+    [CM_prediction_processate2, acc_prediction_processate2, prec_prediction_processate2, spec_prediction_processate2, sens_prediction_processate2, f1_prediction_processate2] = evaluaClassificatore(label_test, predizione_processata2, mostra_cm, classi, metodo, set);
     
     %% Rappresentazione dati processati
     if mostra_risultati_complessivi
@@ -482,7 +484,7 @@ if applica_postprocess_singolo
         ylabel('[a.u.]');
         
         subplot(4,1,4);
-        plot(label_process);
+        plot(label_test);
         title('Ground truth');
         xlabel('Campioni');
         ylabel('[a.u.]');

@@ -8,19 +8,25 @@ clc
 mostra_grafici_segnali = false;                      % Mostra grafici relativi ai segnali pre-classificazione
 mostra_segnale_per_canale = false;
 
+percorso_dati_aperture = "Original_data/aperture.txt";
+percorso_dati_chiusure = "Original_data/chiusure.txt";
+percorso_label_training = "Prepared_data/label_dataset_completo";
+
 valore_apertura = 1;                                % Valore label apertura
 valore_chiusura = 2;                                % Valore label chiusura
 classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
 
 allena_svm = false;                                  % Esegui la sezione di addestramento e testing SVM
-allena_lda = false;                                  % Esegui la sezione di addestramento e testing LDA
+allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
 allena_rete_neurale = true; 
 
-rapporto_training_validation = 0.1;
+rapporto_training_validation = 0.7;
+salvataggio_train_val = true;
 numero_worker = 14; 
 
-salva_modelli = false;                               % Salva i modelli allenati                           
-percorso_salvataggio = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati"; % Percorso dove salvare i modelli
+salva_modelli = true;                               % Salva i modelli allenati                           
+percorso_salvataggio_modelli = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento"; % Percorso dove salvare i modelli
+percorso_salvataggio_train_val = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data";
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 
@@ -134,7 +140,7 @@ discrimType = 'quadratic'; % 'linear', 'quadratic', 'diaglinear', 'diagquadratic
 
 
 %% ================= Avvio pool se necessario e non attivo =================
-if prediction_parallel || svm_parameter_hypertuning
+if svm_parameter_hypertuning
     if isempty(gcp('nocreate'))
             parpool('local', numero_worker); % Avvia in modalità processes
             %parpool('Threads')              % Avvia in modalità thread
@@ -148,14 +154,14 @@ end
 %% Import segnali
 
 % Import segnali aperture
-sig = readtable('Original_data\aperture.txt',"Delimiter", '\t');
+sig = readtable(percorso_dati_aperture,"Delimiter", '\t');
 %t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
 sig(:,1) = [];
 sig_aperture = table2array(sig);
 
 
 % Import segnali chiusure
-sig = readtable('Original_data\chiusure.txt',"Delimiter", '\t');
+sig = readtable(percorso_dati_chiusure,"Delimiter", '\t');
 %t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
 sig(:,1) = [];
 sig_chiusura = table2array(sig);
@@ -281,7 +287,17 @@ end
 
 %% Caricamento label segnale di training
 
-load("label_dataset_completo.mat", 'label_dataset_completo')
+data = load(percorso_label_training);
+varNames = fieldnames(data);
+
+% Verifica che ci sia almeno una variabile nel file
+if ~isempty(varNames)
+    % Estrai la prima variabile trovata e assegnala a 'test_signal'
+    label_dataset_completo = data.(varNames{1});
+    
+else
+    disp('Nessuna variabile trovata nel file.');
+end
 
 % Taglio del segnale perché abbia la stessa lunghezza del label
 envelope_std = envelope_std(1:length(label_dataset_completo), :);
@@ -309,9 +325,16 @@ validation_idx = index_random(round(rapporto_training_validation*num_samp):end);
 
 sig_train = envelope_std(training_idx,:);
 sig_val = envelope_std(validation_idx,:);
-label_train = label_trainC(training_idx,:);
-label_val = label_trainC(validation_idx,:);
+label_train = label_dataset_completo(training_idx,:);
+label_val = label_dataset_completo(validation_idx,:);
 
+% Salvataggio training e validation set
+if salvataggio_train_val
+    save(strcat(percorso_salvataggio_train_val,"/training_set"), "sig_train")
+    save(strcat(percorso_salvataggio_train_val,"/validation_set"), "sig_val")
+    save(strcat(percorso_salvataggio_train_val,"/label_train"), "label_train")
+    save(strcat(percorso_salvataggio_train_val,"/label_val"), "label_val")
+end
 %% SVM - addestramento
 
 if allena_svm
@@ -342,7 +365,7 @@ if allena_svm
 
     if salva_modelli
         % Salva il modello allenato in un file .mat
-        save(fullfile(percorso_salvataggio, 'svm_model.mat'), 'svm_model');
+        save(fullfile(percorso_salvataggio_modelli, 'svm_model.mat'), 'svm_model');
     end  
 end  
 
@@ -357,7 +380,7 @@ if allena_lda
 
     if salva_modelli
         % Salva il modello allenato in un file .mat
-        save(fullfile(percorso_salvataggio, 'lda_model.mat'), 'lda_model');
+        save(fullfile(percorso_salvataggio_modelli, 'lda_model.mat'), 'lda_model');
     end
 end  
 
@@ -468,6 +491,6 @@ if allena_rete_neurale
 
     if salva_modelli
             % Salva il modello allenato in un file .mat
-            save(fullfile(percorso_salvataggio, 'nn_model.mat'), 'net');
+            save(fullfile(percorso_salvataggio_modelli, 'nn_model.mat'), 'net');
     end
 end
