@@ -1,6 +1,9 @@
+%% Inizializzazione
 clear 
 close all
 clc
+
+warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 
 %% Carica i dati delle contrazioni massimali
 % Carica i dati delle contrazioni massimali utilizzando readtable
@@ -11,9 +14,10 @@ chiusura_max(:,1) = [];
 
 % Converti i dati della tabella in matrici
 apertura_max = table2array(apertura_max);
-segnale_nullo = apertura_max(1:9000, :);
+segnale_nullo = vertcat(apertura_max(1:9000, :), apertura_max(22000:end, :));
 apertura_max = apertura_max(9544:21182, :);
 chiusura_max = table2array(chiusura_max);
+segnale_nullo = vertcat(chiusura_max(1:8500, :), segnale_nullo, chiusura_max(22000:end, :));
 chiusura_max = chiusura_max(9126:21182, :);
 
 %% Parametri per la finestratura
@@ -53,6 +57,24 @@ for ch = 1:num_channels
 end
 
 %% Calcola i valori di ARV per ciascun canale per i dati non attivi
+
+% Prima si vanno a spostare randomicamente i valori all'interno delle
+% colonne
+
+% Inizializziamo una matrice B della stessa dimensione di A
+[nRows, nCols] = size(segnale_nullo);
+segnale_nullo_random = zeros(nRows, nCols);
+
+% Per ogni colonna di A, mescoliamo i valori e li mettiamo in B
+for col = 1:nCols
+    % Otteniamo una permutazione casuale degli indici delle righe
+    randIdx = randperm(nRows);
+    % Riorganizziamo gli elementi della colonna corrente
+    segnale_nullo_random(:, col) = segnale_nullo(randIdx, col);
+end
+
+segnale_nullo = segnale_nullo_random;
+
 num_samples_nullo = size(segnale_nullo, 1);
 num_windows_nullo = floor((num_samples_nullo - window_size) / step) + 1;
 
@@ -74,11 +96,11 @@ prototype_nullo = mean(ARV_values_nullo, 1);
 
 %% Classificatore che usa la cosine similarity
 % Carica i dati di test utilizzando load
-ground_truth = load("label_training_completo.mat");
-ground_truth = ground_truth.label_trainC;
+ground_truth = load("label_test.mat");
+ground_truth = ground_truth.label_test;
 
-test_data = load("training_completo.mat");
-test_data = test_data.envelope_std;
+test_data = load("test_set.mat");
+test_data = test_data.envelope_std_test;
 
 % Calcola i valori di ARV per ciascun canale per i dati di test
 num_samples_test = size(test_data, 1);
@@ -134,6 +156,8 @@ plot(ground_truth_windows);
 title('Ground truth');
 xlabel('Campioni');
 ylabel('[a.u.]');
+
+linkaxes([subplot(2,1,1), subplot(2,1,2)]);
 
 % Definizione delle funzioni
 function sim = cosine_similarity(vec1, vec2)

@@ -1,4 +1,4 @@
-% Inizializzazione
+%% Inizializzazione
 clear 
 close all
 clc
@@ -6,18 +6,19 @@ clc
 %% Impostazioni script e inizializzazione
 
 % ======================== Parametri generali script ======================
-mostra_grafici_segnali = true;                      % Mostra grafici relativi ai segnali pre-classificazione
-mostra_segnale_per_canale = true;
+mostra_grafici_segnali = false;                      % Mostra grafici relativi ai segnali pre-classificazione
+mostra_segnale_per_canale = false;
 mostra_cm = true;                                   % Mostra le CM dei vari classificatori
 mostra_risultati_singoli = true;                   % Mostra confronto singolo classificatore - Ground Truth
 mostra_risultati_complessivi = true;                 % Mostra confronto tutti i classificatori - Ground Truth
+
 valore_apertura = 1;                                % Valore label apertura
 valore_chiusura = 2;                                % Valore label chiusura
 classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
 
-allena_svm = true;                                  % Esegui la sezione di addestramento e testing SVM
-allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
-allena_rete_neurale = true;                         % Esegui la sezione di addestramento e testing rete neurale
+allena_svm = false;                                  % Esegui la sezione di addestramento e testing SVM
+allena_lda = false;                                  % Esegui la sezione di addestramento e testing LDA
+allena_rete_neurale = false;                         % Esegui la sezione di addestramento e testing rete neurale
 
 numero_worker = 14;                                 % Numero di worker da usare per il parallel pool
 caricamento_modelli = true;                         % Carica modelli già salvati quando usi il test set
@@ -25,15 +26,15 @@ caricamento_modelli = true;                         % Carica modelli già salvat
 salva_modelli = false;                               % Salva i modelli allenati                           
 percorso_salvataggio = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati"; % Percorso dove salvare i modelli
 
-valuta_validation = true;                           % Esegui valutazione dei vari modelli sul validation set
-valuta_training_completo = true;                    % Esegui valutazione dei vari modelli sul training set completo
+valuta_validation = false;                           % Esegui valutazione dei vari modelli sul validation set
+valuta_training_completo = false;                    % Esegui valutazione dei vari modelli sul training set completo
 valuta_test = true;                                 % Esegui valutazione dei vari modelli sul test set
 
 prediction_parallel = false;                         % Esegui il comando predict usando il parfor (parallel pool)
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 
-rapporto_training_validation = 0.7;
+rapporto_training_validation = 0.1;
 % =========================================================================
 
 
@@ -74,6 +75,10 @@ coding_single = 'onevsall'; % 'onevsone', 'onevsall'
 
 
 %  ========================Parametri addestramento NN =====================
+rete_custom = false;
+
+% Definizione delle opzioni di addestramento
+
 max_epoche = 500;                   % Numero massimo di epoche di allenamento della rete neurale
 val_metrica_obiettivo = 0.00005;      % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
         
@@ -143,8 +148,8 @@ end
 
 % =========================== Parametri postprocess =======================
 applica_postprocess = true;                         % Applica funzion di postprocess sul vettore di classificazione
-segnale_da_elaborare = 'prediction_nn_trainC';
-etichetta_da_elaborare = 'label_trainC';                                
+segnale_da_elaborare = 'prediction_nn_test';
+etichetta_da_elaborare = 'label_test';                                
 lunghezza_buffer_precedenti = 400;
 lunghezza_buffer_successivi = 400;
 % =========================================================================
@@ -152,18 +157,24 @@ lunghezza_buffer_successivi = 400;
 %% Import segnali
 
 % Import segnali aperture
-sig = readtable('Data\aperture.txt',"Delimiter", '\t');
+sig = readtable('Original_data\aperture.txt',"Delimiter", '\t');
 %t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
 sig(:,1) = [];
 sig_aperture = table2array(sig);
 % Import segnali chiusura
-sig = readtable('Data\chiusure.txt',"Delimiter", '\t');
+sig = readtable('Original_data\chiusure.txt',"Delimiter", '\t');
 %t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
 sig(:,1) = [];
 sig_chiusura = table2array(sig);
 
 % Concatenazione in un unica matrice segnale, prima apertura e poi chiusura
 sig = [sig_aperture; sig_chiusura];
+
+% Salvataggio dataset completo non processato
+sig_salvabile = sig(1:662205, :);
+save("Prepared_data/dataset_completo", "sig_salvabile")
+
+pause
 
 %% Filtraggio segnale
 
@@ -314,6 +325,12 @@ label_trainC  = [label_apertura(1:end_ind_apertura(end)) , label_chiusura(inizio
 % Taglio del segnale perché abbia la stessa lunghezza del label
 envelope_std = envelope_std(1:length(label_trainC), :);
 
+% Salvataggio variabili contente trainig e label training complete
+    %save('training_completo', "envelope_std")
+    %save('label_training_completo', "label_trainC")
+    %pause
+
+
 if mostra_grafici_segnali
     figure
     plot(label_trainC)
@@ -337,6 +354,14 @@ sig_train = envelope_std(training_idx,:);
 sig_val = envelope_std(validation_idx,:);
 label_train = label_trainC(training_idx,:);
 label_val = label_trainC(validation_idx,:);
+
+% Salvataggio training e validation set
+save("Prepared_data/training_set", "sig_train")
+save("Prepared_data/validation_set", "sig_val")
+save("Prepared_data/label_training", "label_train")
+save("Prepared_data/label_validation", "label_val")
+
+pause
 
 %% SVM - addestramento
 
@@ -433,89 +458,106 @@ end
 
 if allena_rete_neurale
     % Definizione architettura - sistema completo ma non testato
-    % layers = [
-    %     sequenceInputLayer(5)
-    %     convolution1dLayer(5, 10, 'Padding', 'same')
-    %     reluLayer
-    %     maxPooling1dLayer(2, 'Stride', 2)
-    %     convolution1dLayer(5, 20, 'Padding', 'same')
-    %     reluLayer
-    %     fullyConnectedLayer(3)
-    %     softmaxLayer
-    %     classificationLayer];
-    % 
-    % % Definizione delle opzioni di addestramento
-    % options = trainingOptions('adam', ...
-    %     'MaxEpochs', 10, ...
-    %     'MiniBatchSize', 32, ...
-    %     'ValidationData', {valData, valLabels}, ...
-    %     'Plots', 'training-progress' ...
-    %     'ExecutionEnvironment', 'gpu', ... % Imposta l'ambiente di esecuzione su 'gpu'
-    %      'OutputFcn', @(info)showProgress(info));
-    % 
-    % % Addestramento del modello
-    % net = trainNetwork(sig_train, label_train, layers, options);
+    % Definizione dei layer della rete neurale
+    if rete_custom
 
-    % Versione 1 layer
-    if num_layer == 1
-        net = patternnet(layer1, train_function, 'crossentropy');  % Rete con un solo hidden layer
-        net.layers{1}.transferFcn = neuron_function;   % Funzione di trasferimento del layer nascosto
-        net.layers{2}.transferFcn = 'softmax';  % Funzione di trasferimento del layer di output
-        
-        net.trainFcn = train_function;  
-        net.trainParam.epochs = max_epoche;
-        net.trainParam.goal = val_metrica_obiettivo;
-        if strcmp(train_function, 'traingdx')  
-            net.trainParam.lr = lr;
-            net.trainParam.mc = momentum;
+        % Al momento qui sotto non funziona ancora
+        % % Parametri dei dati
+        % numFeatures = 5;             % Numero di caratteristiche per ciascun timestep
+        % timeSteps = 50;              % Numero di timesteps per sequenza
+        % numTrainingSequences = 300;  % Numero di sequenze di addestramento
+        % numValidationSequences = 100;% Numero di sequenze di validazione
+        % numClasses = 3;              % Numero di classi per la classificazione
+        % minSeqLength = 50;
+        % 
+        % % Trasposizione dei dati in formato [features, timeSteps, numSequences]
+        % sig_train = reshape(sig_train', [numFeatures, timeSteps, numTrainingSequences]);
+        % 
+        % layers = [
+        %     sequenceInputLayer(numFeatures, 'MinLength', timeSteps)
+        %     convolution1dLayer(5, 10, 'Padding', 'same')
+        %     reluLayer
+        %     convolution1dLayer(5, 20, 'Padding', 'same')
+        %     reluLayer
+        %     fullyConnectedLayer(numClasses)
+        %     softmaxLayer
+        %     classificationLayer];
+        % 
+        % options_custom = trainingOptions('adam', ...
+        %     'MaxEpochs', 10, ...
+        %     'MiniBatchSize', 32, ...
+        %     'ValidationData', {sig_val', label_val'}, ...
+        %     'Plots', 'training-progress', ...
+        %     'ExecutionEnvironment', 'gpu', ... % Imposta l'ambiente di esecuzione su 'gpu'
+        %     'OutputFcn', @(info)showProgress(info));
+        % 
+        % % Addestramento del modello
+        % net = trainNetwork(sig_train', label_train', layers, options_custom);
+
+    else
+
+        % Versione 1 layer
+        if num_layer == 1
+            net = patternnet(layer1, train_function, 'crossentropy');  % Rete con un solo hidden layer
+            net.layers{1}.transferFcn = neuron_function;   % Funzione di trasferimento del layer nascosto
+            net.layers{2}.transferFcn = 'softmax';  % Funzione di trasferimento del layer di output
+            
+            net.trainFcn = train_function;  
+            net.trainParam.epochs = max_epoche;
+            net.trainParam.goal = val_metrica_obiettivo;
+            if strcmp(train_function, 'traingdx')  
+                net.trainParam.lr = lr;
+                net.trainParam.mc = momentum;
+            end
         end
-    end
-
-    % Versione 2 layer
-    if num_layer == 2
-        net = patternnet([layer1 layer2], train_function, 'crossentropy');  
-        net.layers{1}.transferFcn = neuron_function;
-        net.layers{2}.transferFcn = neuron_function;
-        net.layers{3}.transferFcn = 'softmax';
     
-        net.trainFcn = train_function;  
-        net.trainParam.epochs = max_epoche;
-        net.trainParam.goal = val_metrica_obiettivo;
-        if strcmp(train_function, 'traingdx')
-            net.trainParam.lr = lr;
-            net.trainParam.mc = momentum;
-        end
-    end
-
-    % Versione 3 layer
-    if num_layer == 3
-        net = patternnet([layer1 layer2 layer3], train_function, 'crossentropy');  
-        net.layers{1}.transferFcn = neuron_function;
-        net.layers{2}.transferFcn = neuron_function;
-        net.layers{3}.transferFcn = neuron_function;   
-        net.layers{4}.transferFcn = 'softmax';  
+        % Versione 2 layer
+        if num_layer == 2
+            net = patternnet([layer1 layer2], train_function, 'crossentropy');  
+            net.layers{1}.transferFcn = neuron_function;
+            net.layers{2}.transferFcn = neuron_function;
+            net.layers{3}.transferFcn = 'softmax';
         
-        net.trainFcn = train_function;  
-        net.trainParam.epochs = max_epoche;
-        net.trainParam.goal = val_metrica_obiettivo;
-        if strcmp(train_function, 'traingdx') 
-            net.trainParam.lr = lr;
-            net.trainParam.mc = momentum;
+            net.trainFcn = train_function;  
+            net.trainParam.epochs = max_epoche;
+            net.trainParam.goal = val_metrica_obiettivo;
+            if strcmp(train_function, 'traingdx')
+                net.trainParam.lr = lr;
+                net.trainParam.mc = momentum;
+            end
         end
-    end
-
-    % Comandi per gestire automaticamente la gestione dell'intero dataset
-    % net.divideParam.trainRatio = 70/100;
-    % net.divideParam.valRatio = 15/100;
-    % net.divideParam.testRatio = 15/100;
     
-    % Adattamento segnali e label a formato rete
-    sig_train = sig_train'; % Trasposizione per adattare a necessità rete
-    label_train = label_train+1;
-    label_train = full(ind2vec(label_train'));  % Converti in formato one-hot e trasponi
-
-    % Allena
-    [net, tr] = train(net, sig_train, label_train);
+        % Versione 3 layer
+        if num_layer == 3
+            net = patternnet([layer1 layer2 layer3], train_function, 'crossentropy');  
+            net.layers{1}.transferFcn = neuron_function;
+            net.layers{2}.transferFcn = neuron_function;
+            net.layers{3}.transferFcn = neuron_function;   
+            net.layers{4}.transferFcn = 'softmax';  
+            
+            net.trainFcn = train_function;  
+            net.trainParam.epochs = max_epoche;
+            net.trainParam.goal = val_metrica_obiettivo;
+            if strcmp(train_function, 'traingdx') 
+                net.trainParam.lr = lr;
+                net.trainParam.mc = momentum;
+            end
+        end
+    
+        % Comandi per gestire automaticamente la gestione dell'intero dataset
+        % net.divideParam.trainRatio = 70/100;
+        % net.divideParam.valRatio = 15/100;
+        % net.divideParam.testRatio = 15/100;
+        
+        % Adattamento segnali e label a formato rete
+        sig_train = sig_train'; % Trasposizione per adattare a necessità rete
+        label_train = label_train+1;
+        label_train = full(ind2vec(label_train'));  % Converti in formato one-hot e trasponi
+    
+        % Allena
+        [net, tr] = train(net, sig_train, label_train);
+    
+        end
 
     if salva_modelli
             % Salva il modello allenato in un file .mat
@@ -554,14 +596,19 @@ end
 
 if valuta_test
     clear sig
-    label_test = load("Data\activation_final.mat");
+    label_test = load("Original_data\activation_final.mat");
     label_test = label_test.activation_final';
-    
+
     % Caricamento dati grezzi EMG
-    sig = readtable('Data\test.txt',"Delimiter", '\t');
+    sig = readtable('Original_data\test.txt',"Delimiter", '\t');
     t_hyp = sig(:,1);
     sig(:,1) = [];
     sig_test = table2array(sig);
+
+    % Salvataggio test set non processato
+    save("Prepared_data/test_set", "sig_test")
+
+    pause
     
     n_channel = length(sig_test(1,:));
     
@@ -662,6 +709,11 @@ if valuta_test
     end
 
     label_test = [label_test; 0]; % Mancava un'etichetta
+
+    % Salvataggio label_test e test_set 
+    % save('test_set', "envelope_std_test")
+    % save('label_test', "label_test")
+    % pause
     
     if mostra_grafici_segnali
         figure()
