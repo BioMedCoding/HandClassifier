@@ -16,9 +16,20 @@ valore_apertura = 1;                                % Valore label apertura
 valore_chiusura = 2;                                % Valore label chiusura
 classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
 
-allena_svm = true;                                  % Esegui la sezione di addestramento e testing SVM
+applica_data_augmentation = true;
+
+    applica_data_augmentation_rumore_gaussiano = false;
+    livello_rumore_gaussiano = 0.01; 
+    
+    applica_data_augmentation_ampiezza_dinamica = true;
+    amp_range = [0.7, 1.3];                             % Range di variazione da applicare
+    change_rate = 5;                                    % Velocità di cambiamento dell'ampiezza
+    % Finora meglio  amp_range = [0.7, 1.3]; | change_rate = 5;  
+
+
+allena_svm = false;                                  % Esegui la sezione di addestramento e testing SVM
 allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
-allena_rete_neurale = true; 
+allena_rete_neurale = false; 
 
 rapporto_training_validation = 0.7;
 numero_worker = 14; 
@@ -27,8 +38,8 @@ salva_modelli = true;                               % Salva i modelli allenati
 salvataggio_train_val = true;                       % Salva matrici contenenti training e validation set
 salvataggio_dataset_completo = false;               % Salva matrice contenente il dataset completo (già effettuato, pertanto disattivato)
 
-percorso_salvataggio_modelli = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento"; % Percorso dove salvare i modelli
-percorso_salvataggio_train_val = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data";
+percorso_salvataggio_modelli = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento_gaussiano"; % Percorso dove salvare i modelli
+percorso_salvataggio_train_val = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_gaussiano";
 percorso_salvataggio_dataset_completo = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data";
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
@@ -82,7 +93,7 @@ rete_custom = false;                % Abilita l'utilzzo della rete neurale custo
 max_epoche = 500;                   % Numero massimo di epoche di allenamento della rete neurale
 val_metrica_obiettivo = 0.00005;    % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
       
-lr = 0.05;                          % Learning rate
+lr = 0.02;                          % Learning rate
 momentum = 0.9;                     % Momento durante l'allenamento
 
 train_function = 'trainscg';        % Funzione di training della rete neurale
@@ -101,7 +112,7 @@ neuron_function = 'logsig'; % 'tansig', 'logsig', 'purelin', 'poslin', 'softmax'
         % 'poslin': 75.12% accuretezza processata, 45.7 peggiore (sensibilità 3)
         % 'softmax': no, peggiore
 
-num_layer = 2;
+num_layer = 3;
         % 1  layer da 5: 86.33% accuretazze complessiva (postProcess), 57.54 peggiore (sensibilità 3) 500 epoche
         % 3 layer (10, 5, 3): 87.8% accuretezza complessiva (postProcess), 64.01 peggiore (sensibilità 3) 500 epoche
         % 3 layer (10, 5, 3): 86.78% accuretezza complessiva (postProcess), 59.83 peggiore (sensibilità 3) 1000 epoche arrestato prima 
@@ -283,9 +294,11 @@ end
 %envelope_std = (sig_filt-mean(sig_filt))./std(sig_filt);
 
 if mostra_grafici_segnali
+
     figure
     plot(envelope_std)
-    hold on
+    title('Segnale finale senza rumore')
+
 end
 
 % Salvataggio dataset completo
@@ -302,7 +315,6 @@ varNames = fieldnames(data);
 if ~isempty(varNames)
     % Estrai la prima variabile trovata e assegnala a 'test_signal'
     label_dataset_completo = data.(varNames{1});
-    
 else
     disp('Nessuna variabile trovata nel file.');
 end
@@ -320,8 +332,69 @@ if mostra_grafici_segnali
     ylabel('[a.u.]');
 end
 
+%% Applicazione data augmentation
 
+if applica_data_augmentation
 
+    % Salvataggio del segnale originale, per eventuali usi futuri
+    envelope_std_originale = envelope_std;
+
+    % Creazione variabile che permette di estendere questa sezione in
+    % maniera modulare
+    % Ogni step comunque agisce solo sui dati originali, per non sommare
+    % le modifiche
+    augmentedData = envelope_std;
+    augmentedLabels = label_dataset_completo;
+
+    if applica_data_augmentation_rumore_gaussiano
+    
+        envelope_std_gauss = zeros(size(envelope_std));
+    
+        for i = 1:size(envelope_std_gauss,1)
+    
+            envelope_std_gauss(i, :) = add_gaussian_noise(envelope_std(i, :), livello_rumore_gaussiano);
+
+        end
+
+        augmentedData = [augmentedData; envelope_std_gauss];
+        augmentedLabels = [augmentedLabels; label_dataset_completo];
+    
+    end
+
+    if applica_data_augmentation_ampiezza_dinamica
+    
+        varied_amplitude_signal = zeros(size(envelope_std));
+    
+        for i = 1:size(envelope_std,1)
+        
+            varied_amplitude_signal(i, :) = vary_amplitude(envelope_std(i, :), amp_range, change_rate);
+    
+        end
+    
+        augmentedData = [augmentedData; varied_amplitude_signal];
+        augmentedLabels = [augmentedLabels; label_dataset_completo];
+        
+    end
+    
+    if mostra_grafici_segnali
+        figure
+        plot(augmentedData)
+        title('Segnale finale senza rumore')
+        hold on
+        plot(augmentedLabels)
+    end
+
+    % Assegna alla variabile i nomi previsti in seguito
+    envelope_std = augmentedData;
+    label_dataset_completo = augmentedLabels;
+end
+
+pause
+
+%% Bilanciamento classi
+[envelope_std, label_dataset_completo] = balance_dataset(envelope_std, label_dataset_completo, 'smote');
+
+%pause
 
 %% Divisione training_validation set
 
@@ -500,5 +573,170 @@ if allena_rete_neurale
     if salva_modelli
             % Salva il modello allenato in un file .mat
             save(fullfile(percorso_salvataggio_modelli, 'nn_model.mat'), 'net');
+    end
+end
+
+
+% Funzione per aggiungere rumore gaussiano
+function augmented_signal = add_gaussian_noise(signal, noise_level)
+    noise = noise_level * randn(size(signal));
+    augmented_signal = signal + noise;
+end
+
+% Funzione per inserire una variazione temporale delle ampiezze
+function augmented_signal = vary_amplitude(signal, amp_range, change_rate)
+    % Genera un vettore di fattori di scaling che varia nel tempo
+    time_vector = 1:length(signal);
+    scaling_factors = amp_range(1) + (amp_range(2) - amp_range(1)) * 0.5 * (1 + sin(2 * pi * change_rate * time_vector / length(signal)));
+    
+    % Applica i fattori di scaling al segnale
+    augmented_signal = signal .* scaling_factors;
+end
+
+
+% Funzione per andare a bilanciare il dataset, eccessivamente lenta per
+% l'utilizzo
+% function [balanced_data, balanced_labels] = balance_dataset(input_data, target_labels, method)
+%     % Bilancia il dataset utilizzando downsampling o SMOTE
+%     % input_data: matrice dei dati di input (ogni riga è un esempio)
+%     % target_labels: vettore delle etichette dei target (classe di ciascun esempio)
+%     % method: stringa che indica il metodo ('downsampling' o 'smote')
+% 
+%     % Trova le etichette uniche e conta il numero di esempi per ciascuna classe
+%     [unique_labels, ~, label_indices] = unique(target_labels);
+%     label_counts = histc(label_indices, 1:numel(unique_labels));
+% 
+%     % Trova la classe con il massimo numero di esempi
+%     [max_count, max_index] = max(label_counts);
+% 
+%     % Inizializza le variabili di output
+%     balanced_data = [];
+%     balanced_labels = [];
+% 
+%     if strcmp(method, 'downsampling')
+%         % Downsampling delle classi maggioritarie
+%         min_count = min(label_counts);
+%         for i = 1:numel(unique_labels)
+%             % Indici degli esempi di questa classe
+%             class_indices = find(label_indices == i);
+% 
+%             % Seleziona un sottoinsieme casuale di min_count esempi
+%             selected_indices = randsample(class_indices, min_count);
+%             balanced_data = [balanced_data; input_data(selected_indices, :)];
+%             balanced_labels = [balanced_labels; target_labels(selected_indices)];
+%         end
+%     elseif strcmp(method, 'smote')
+%         % Oversampling delle classi minoritarie utilizzando SMOTE
+%         balanced_data = input_data;
+%         balanced_labels = target_labels;
+% 
+%         for i = 1:numel(unique_labels)
+%             if label_counts(i) < max_count
+%                 % Numero di esempi da aggiungere per questa classe
+%                 num_to_add = max_count - label_counts(i);
+% 
+%                 % Indici degli esempi di questa classe
+%                 class_indices = find(label_indices == i);
+% 
+%                 % Verifica che ci siano almeno due esempi per interpolare
+%                 if numel(class_indices) < 2
+%                     error('Non ci sono abbastanza esempi per interpolare nella classe %d', unique_labels(i));
+%                 end
+% 
+%                 % Genera esempi sintetici usando SMOTE
+%                 for j = 1:num_to_add
+%                     idx1 = class_indices(randi(numel(class_indices)));
+%                     idx2 = class_indices(randi(numel(class_indices)));
+% 
+%                     % Verifica che gli indici siano diversi
+%                     while idx1 == idx2
+%                         idx2 = class_indices(randi(numel(class_indices)));
+%                     end
+% 
+%                     % Genera un esempio sintetico interpolando tra i due esempi
+%                     alpha = rand();
+%                     synthetic_example = alpha * input_data(idx1, :) + (1 - alpha) * input_data(idx2, :);
+% 
+%                     % Aggiungi l'esempio sintetico al dataset
+%                     balanced_data = [balanced_data; synthetic_example];
+%                     balanced_labels = [balanced_labels; target_labels(idx1)];
+%                 end
+%             end
+%         end
+%     else
+%         error('Metodo non riconosciuto. Usa "downsampling" o "smote".');
+%     end
+% end
+
+% Funzione velocizzata per il bilanciamento del dataset
+function [balanced_data, balanced_labels] = balance_dataset(input_data, target_labels, method)
+    % Bilancia il dataset utilizzando downsampling o SMOTE
+    % input_data: matrice dei dati di input (ogni riga è un esempio)
+    % target_labels: vettore delle etichette dei target (classe di ciascun esempio)
+    % method: stringa che indica il metodo ('downsampling' o 'smote')
+    
+    % Trova le etichette uniche e conta il numero di esempi per ciascuna classe
+    [unique_labels, ~, label_indices] = unique(target_labels);
+    label_counts = histc(label_indices, 1:numel(unique_labels));
+    
+    % Trova la classe con il massimo numero di esempi
+    [max_count, ~] = max(label_counts);
+    
+    if strcmp(method, 'downsampling')
+        % Downsampling delle classi maggioritarie
+        min_count = min(label_counts);
+        balanced_data = [];
+        balanced_labels = [];
+        for i = 1:numel(unique_labels)
+            % Indici degli esempi di questa classe
+            class_indices = find(label_indices == i);
+            
+            % Seleziona un sottoinsieme casuale di min_count esempi
+            selected_indices = randsample(class_indices, min_count);
+            balanced_data = [balanced_data; input_data(selected_indices, :)];
+            balanced_labels = [balanced_labels; target_labels(selected_indices)];
+        end
+
+    elseif strcmp(method, 'smote')
+        % Oversampling delle classi minoritarie utilizzando SMOTE
+        balanced_data = input_data;
+        balanced_labels = target_labels;
+        
+        for i = 1:numel(unique_labels)
+            if label_counts(i) < max_count
+                % Numero di esempi da aggiungere per questa classe
+                num_to_add = max_count - label_counts(i);
+                
+                % Indici degli esempi di questa classe
+                class_indices = find(label_indices == i);
+                
+                % Verifica che ci siano almeno due esempi per interpolare
+                if numel(class_indices) < 2
+                    error('Non ci sono abbastanza esempi per interpolare nella classe %d', unique_labels(i));
+                end
+                
+                % Genera esempi sintetici usando SMOTE
+                synthetic_examples = zeros(num_to_add, size(input_data, 2));
+                for j = 1:num_to_add
+                    idx1 = class_indices(randi(numel(class_indices)));
+                    idx2 = class_indices(randi(numel(class_indices)));
+                    
+                    % Verifica che gli indici siano diversi
+                    while idx1 == idx2
+                        idx2 = class_indices(randi(numel(class_indices)));
+                    end
+                    
+                    % Genera un esempio sintetico interpolando tra i due esempi
+                    alpha = rand();
+                    synthetic_examples(j, :) = alpha * input_data(idx1, :) + (1 - alpha) * input_data(idx2, :);
+                end
+                
+                % Aggiungi gli esempi sintetici al dataset
+                balanced_data = [balanced_data; synthetic_examples];
+                balanced_labels = [balanced_labels; repmat(unique_labels(i), num_to_add, 1)];
+            end
+        end
+    else
+        error('Metodo non riconosciuto. Usa "downsampling" o "smote".');
     end
 end

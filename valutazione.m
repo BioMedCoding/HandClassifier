@@ -1,7 +1,7 @@
 %% Inizializzazione
 clear 
 close all
-clc
+%clc
 
 %% N.B.
 % QUANDO SI TESTA UN SEGNALE SETTARE IL PARAMETRO RELATIVO AL PREPROCESS
@@ -14,7 +14,7 @@ clc
 %% ======================== Parametri generali script ======================
 mostra_grafici_segnali = false;  
 mostra_segnale_per_canale = false;
-mostra_cm = true;                                    % Mostra le CM dei vari classificatori
+mostra_cm = false;                                    % Mostra le CM dei vari classificatori
 mostra_risultati_singoli = true;                     % Mostra confronto singolo classificatore - Ground Truth
 mostra_risultati_complessivi = true;                 % Mostra confronto tutti i classificatori - Ground Truth
 
@@ -22,7 +22,7 @@ classi = {'Rilassata', 'Apertura','Chiusura'};       % Nomi assegnati alle class
 
 percorso_segnale = "Prepared_data/test_set.mat";
 percorso_label = "Prepared_data/label_test.mat";
-nome_grafici = "Validation set";                           % Nome che viene mostrato nei grafici relativi ai risultati
+nome_grafici = "Test set";                           % Nome che viene mostrato nei grafici relativi ai risultati
 
 preprocessa_segnale = true;
 
@@ -34,13 +34,13 @@ warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning
 
 %% Selezione valutazioni da eseguire
 
-valuta_svm = true;
+valuta_svm = false;
 valuta_lda = true;
-valuta_nn = true;
+valuta_nn = false;
 
 percorso_salvataggio_svm = "Modelli_allenati_addestramento\svm_model.mat";
-percorso_salvataggio_lda = "Modelli_allenati_addestramento\lda_model.mat";
-percorso_salvataggio_nn = "Modelli_allenati_addestramento\nn_model.mat";
+percorso_salvataggio_lda = "Modelli_allenati_addestramento_gaussiano\lda_model.mat";
+percorso_salvataggio_nn = "Modelli_allenati_addestramento_gaussiano\nn_model.mat";
 
 prediction_parallel = false;
 %% =========================================================================
@@ -62,13 +62,14 @@ visualisation = "no";                               % Mostra grafici filtraggio
 
 
 % =========================== Parametri postprocess =======================
-applica_postprocess_multiplo = true;                         % Applica funzion di postprocess sul vettore di classificazione
+applica_postprocess_multiplo = false;                         % Applica funzion di postprocess sul vettore di classificazione
 
 applica_postprocess_singolo = true;
-segnale_da_elaborare = 'prediction_nn_test';                             
+segnale_da_elaborare = 'prediction_lda_test';                             
 
-lunghezza_buffer_precedenti = 400;
+lunghezza_buffer_precedenti = 400;  % 400 ha dato valori migliori
 lunghezza_buffer_successivi = 400;
+
 % =========================================================================
 
 
