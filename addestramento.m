@@ -16,15 +16,18 @@ valore_apertura = 1;                                % Valore label apertura
 valore_chiusura = 2;                                % Valore label chiusura
 classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
 
+dati_da_processare = true;                          % Se true carica dati grezzi e preprocessa, altrimenti carica direttamente dati e label già pronti
+percorso_dati_preprocessati = "External_data/dataset_completo_preprocessato";
+percorso_label_preprocessati = "External_data/label_dataset_completo_preprocessato";
 applica_data_augmentation = true;
 
-    applica_data_augmentation_rumore_gaussiano = false;
-    livello_rumore_gaussiano = 0.01; 
-    
-    applica_data_augmentation_ampiezza_dinamica = true;
-    amp_range = [0.7, 1.3];                             % Range di variazione da applicare
-    change_rate = 5;                                    % Velocità di cambiamento dell'ampiezza
-    % Finora meglio  amp_range = [0.7, 1.3]; | change_rate = 5;  
+applica_data_augmentation_rumore_gaussiano = false;
+livello_rumore_gaussiano = 0.01; 
+
+applica_data_augmentation_ampiezza_dinamica = true;
+amp_range = [0.7, 1.3];                             % Range di variazione da applicare
+change_rate = 5;                                    % Velocità di cambiamento dell'ampiezza
+% Finora meglio  amp_range = [0.7, 1.3]; | change_rate = 5;  
 
 
 allena_svm = false;                                  % Esegui la sezione di addestramento e testing SVM
@@ -165,173 +168,178 @@ end
 
 
 
-%% Import segnali
-
-% Import segnali aperture
-sig = readtable(percorso_dati_aperture,"Delimiter", '\t');
-%t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
-sig(:,1) = [];
-sig_aperture = table2array(sig);
+%% Import segnali 
 
 
-% Import segnali chiusure
-sig = readtable(percorso_dati_chiusure,"Delimiter", '\t');
-%t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
-sig(:,1) = [];
-sig_chiusura = table2array(sig);
-
-% Concatenazione in un unica matrice segnale, prima apertura e poi chiusura
-sig = [sig_aperture; sig_chiusura];
-
-
-
-
-%% Filtraggio segnale
-
-n_channel = length(sig(1,:));
-sig_filt= zeros(length(sig),n_channel);
-
-% Filtraggio segnale
-for i=1:n_channel
-    sig_filt(:,i) = filter_general(sig(:,i),tipo_filtro,f_sample,"fL",f_taglio_basso,"fH",f_taglio_alta,"fN",f_notch,"visualisation",visualisation);
-end
-
-if mostra_segnale_per_canale
-    figure;
-
-    subplot(5,1,1);
-        plot(sig_filt(:,1));
-        title('Segnale canale 1 grezzo - train');
-        xlabel('Campioni');
-        ylabel('[a.u.]');
+if dati_da_processare
+    % Import segnali aperture
+    sig = readtable(percorso_dati_aperture,"Delimiter", '\t');
+    %t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
+    sig(:,1) = [];
+    sig_aperture = table2array(sig);
     
-    subplot(5,1,2);
-        plot(sig_filt(:,2));
-        title('Segnale canale 2 grezzo - train');
-        xlabel('Campioni');
-        ylabel('[a.u.]');
-
-    subplot(5,1,3);
-        plot(sig_filt(:,3));
-        title('Segnale canale 3 grezzo - train');
-        xlabel('Campioni');
-        ylabel('[a.u.]');
-
-    subplot(5,1,4);
-        plot(sig_filt(:,4));
-        title('Segnale canale 4 grezzo - train');
-        xlabel('Campioni');
-        ylabel('[a.u.]');
-
-    subplot(5,1,5);
-        plot(sig_filt(:,5));
-        title('Segnale canale 5 grezzo - train');
-        xlabel('Campioni');
-        ylabel('[a.u.]');
     
-    %Collega gli assi verticali dei due subplot
-    linkaxes([subplot(5,1,1), subplot(5,1,2), subplot(5,1,3), subplot(5,1,4), subplot(5,1,5)]);
-end
-
-% Creazione inviluppo
-
-envelope = zeros(length(sig_filt),n_channel);
-
-for i=1:n_channel
-    envelope(:,i) = filter_general(abs(sig_filt(:,i)),tipo_filtro,f_sample,"fH",f_envelope,"percH",percH);   
-end
-
-if mostra_grafici_segnali
-    figure
-    plot(envelope)
-    title('Inviluppo segnale grezzo');
-    xlabel('Campioni');
-    ylabel('[uV]');
-end
-
-% Standardizza i valori
-
-envelope_std = (envelope-mean(envelope))./std(envelope);
-
-if mostra_segnale_per_canale
-    figure;
-
-    subplot(5,1,1);
-        plot(envelope_std(:,1));
-        title('Segnale canale 1 inviluppato e standardizzato - train');
-        xlabel('Campioni');
-        ylabel('[a.u.]');
+    % Import segnali chiusure
+    sig = readtable(percorso_dati_chiusure,"Delimiter", '\t');
+    %t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
+    sig(:,1) = [];
+    sig_chiusura = table2array(sig);
     
-    subplot(5,1,2);
-        plot(envelope_std(:,2));
-        title('Segnale canale 2 inviluppato e standardizzato - train');
-        xlabel('Campioni');
-        ylabel('[a.u.]');
-
-    subplot(5,1,3);
-        plot(envelope_std(:,3));
-        title('Segnale canale 3 inviluppato e standardizzato - train');
-        xlabel('Campioni');
-        ylabel('[a.u.]');
-
-    subplot(5,1,4);
-        plot(envelope_std(:,4));
-        title('Segnale canale 4 inviluppato e standardizzato - train');
-        xlabel('Campioni');
-        ylabel('[a.u.]');
-
-    subplot(5,1,5);
-        plot(envelope_std(:,5));
-        title('Segnale canale 5 inviluppato e standardizzato - train');
-        xlabel('Campioni');
-        ylabel('[a.u.]');
+    % Concatenazione in un unica matrice segnale, prima apertura e poi chiusura
+    sig = [sig_aperture; sig_chiusura];
     
-    %Collega gli assi verticali dei due subplot
-    linkaxes([subplot(5,1,1), subplot(5,1,2), subplot(5,1,3), subplot(5,1,4), subplot(5,1,5)]);
+    
+    
+    
+    %% Filtraggio segnale
+    
+    n_channel = length(sig(1,:));
+    sig_filt= zeros(length(sig),n_channel);
+    
+    % Filtraggio segnale
+    for i=1:n_channel
+        sig_filt(:,i) = filter_general(sig(:,i),tipo_filtro,f_sample,"fL",f_taglio_basso,"fH",f_taglio_alta,"fN",f_notch,"visualisation",visualisation);
+    end
+    
+    if mostra_segnale_per_canale
+        figure;
+    
+        subplot(5,1,1);
+            plot(sig_filt(:,1));
+            title('Segnale canale 1 grezzo - train');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+        
+        subplot(5,1,2);
+            plot(sig_filt(:,2));
+            title('Segnale canale 2 grezzo - train');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,3);
+            plot(sig_filt(:,3));
+            title('Segnale canale 3 grezzo - train');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,4);
+            plot(sig_filt(:,4));
+            title('Segnale canale 4 grezzo - train');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,5);
+            plot(sig_filt(:,5));
+            title('Segnale canale 5 grezzo - train');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+        
+        %Collega gli assi verticali dei due subplot
+        linkaxes([subplot(5,1,1), subplot(5,1,2), subplot(5,1,3), subplot(5,1,4), subplot(5,1,5)]);
+    end
+    
+    % Creazione inviluppo
+    
+    envelope = zeros(length(sig_filt),n_channel);
+    
+    for i=1:n_channel
+        envelope(:,i) = filter_general(abs(sig_filt(:,i)),tipo_filtro,f_sample,"fH",f_envelope,"percH",percH);   
+    end
+    
+    if mostra_grafici_segnali
+        figure
+        plot(envelope)
+        title('Inviluppo segnale grezzo');
+        xlabel('Campioni');
+        ylabel('[uV]');
+    end
+    
+    % Standardizza i valori
+    
+    envelope_std = (envelope-mean(envelope))./std(envelope);
+    
+    if mostra_segnale_per_canale
+        figure;
+    
+        subplot(5,1,1);
+            plot(envelope_std(:,1));
+            title('Segnale canale 1 inviluppato e standardizzato - train');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+        
+        subplot(5,1,2);
+            plot(envelope_std(:,2));
+            title('Segnale canale 2 inviluppato e standardizzato - train');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,3);
+            plot(envelope_std(:,3));
+            title('Segnale canale 3 inviluppato e standardizzato - train');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,4);
+            plot(envelope_std(:,4));
+            title('Segnale canale 4 inviluppato e standardizzato - train');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+    
+        subplot(5,1,5);
+            plot(envelope_std(:,5));
+            title('Segnale canale 5 inviluppato e standardizzato - train');
+            xlabel('Campioni');
+            ylabel('[a.u.]');
+        
+        %Collega gli assi verticali dei due subplot
+        linkaxes([subplot(5,1,1), subplot(5,1,2), subplot(5,1,3), subplot(5,1,4), subplot(5,1,5)]);
+    end
+    
+    % Riga per usare il segnale senza inviluppo
+    %envelope_std = (sig_filt-mean(sig_filt))./std(sig_filt);
+    
+    if mostra_grafici_segnali
+    
+        figure
+        plot(envelope_std)
+        title('Segnale finale senza rumore')
+    
+    end
+    
+    % Salvataggio dataset completo
+    % if salvataggio_dataset_completo
+    %     save(strcat(percorso_salvataggio_dataset_completo,"/dataset_completo"), "envelope_std")
+    % end
+    
+    %% Caricamento label segnale di training
+    
+    data = load(percorso_label_training);
+    varNames = fieldnames(data);
+    
+    % Verifica che ci sia almeno una variabile nel file
+    if ~isempty(varNames)
+        % Estrai la prima variabile trovata e assegnala a 'test_signal'
+        label_dataset_completo = data.(varNames{1});
+    else
+        disp('Nessuna variabile trovata nel file.');
+    end
+    
+    % Taglio del segnale perché abbia la stessa lunghezza del label
+    envelope_std = envelope_std(1:length(label_dataset_completo), :);
+    
+    if mostra_grafici_segnali
+        figure
+        plot(label_dataset_completo)
+        hold on
+        plot(envelope_std)
+        title('Segnale e label finali, post elaborazione');
+        xlabel('Campioni');
+        ylabel('[a.u.]');
+    end
+else  % Caso di import diretto di dati e label già processati
+    envelope_std = load(percorso_dati_preprocessati);
+    label_dataset_completo = load(percorso_label_preprocessati);
 end
-
-% Riga per usare il segnale senza inviluppo
-%envelope_std = (sig_filt-mean(sig_filt))./std(sig_filt);
-
-if mostra_grafici_segnali
-
-    figure
-    plot(envelope_std)
-    title('Segnale finale senza rumore')
-
-end
-
-% Salvataggio dataset completo
-% if salvataggio_dataset_completo
-%     save(strcat(percorso_salvataggio_dataset_completo,"/dataset_completo"), "envelope_std")
-% end
-
-%% Caricamento label segnale di training
-
-data = load(percorso_label_training);
-varNames = fieldnames(data);
-
-% Verifica che ci sia almeno una variabile nel file
-if ~isempty(varNames)
-    % Estrai la prima variabile trovata e assegnala a 'test_signal'
-    label_dataset_completo = data.(varNames{1});
-else
-    disp('Nessuna variabile trovata nel file.');
-end
-
-% Taglio del segnale perché abbia la stessa lunghezza del label
-envelope_std = envelope_std(1:length(label_dataset_completo), :);
-
-if mostra_grafici_segnali
-    figure
-    plot(label_dataset_completo)
-    hold on
-    plot(envelope_std)
-    title('Segnale e label finali, post elaborazione');
-    xlabel('Campioni');
-    ylabel('[a.u.]');
-end
-
 %% Applicazione data augmentation
 
 if applica_data_augmentation
