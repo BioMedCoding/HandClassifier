@@ -1,25 +1,29 @@
 import numpy as np
 import pandas as pd
-import scipy.signal as signal
-from scipy.io import loadmat, savemat
-from sklearn.model_selection import train_test_split
+import scipy.signal as sp_signal
+import h5py
+from scipy.io import loadmat
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.svm import SVC
-from sklearn.neural_network import MLPClassifier
 import torch
-print(torch.__version__)
-print(torch.cuda.is_available())
 import torch.nn as nn
 import torch.optim as optim
+import json
+import os
+import signal
+from contextlib import contextmanager
 
 # General parameters
 mostra_grafici_segnali = True
 mostra_segnale_per_canale = False
 
-percorso_dati_aperture = "Original_data/aperture.txt"
-percorso_dati_chiusure = "Original_data/chiusure.txt"
-percorso_label_training = "Prepared_data/label_dataset_completo"
+# Define relative paths based on the current working directory
+base_dir = os.path.dirname(os.path.abspath(__file__))
+percorso_dati_aperture = os.path.join(base_dir, "Original_data/aperture.txt")
+percorso_dati_chiusure = os.path.join(base_dir, "Original_data/chiusure.txt")
+percorso_label_training = os.path.join(base_dir, "Prepared_data/label_dataset_completo.mat")
 
 valore_apertura = 1
 valore_chiusura = 2
@@ -33,8 +37,8 @@ amp_range = [0.7, 1.3]
 change_rate = 5
 
 allena_svm = False
-allena_lda = True
-allena_rete_neurale = False
+allena_lda = False
+allena_rete_neurale = True
 
 rapporto_training_validation = 0.7
 numero_worker = 14
@@ -43,9 +47,17 @@ salva_modelli = True
 salvataggio_train_val = True
 salvataggio_dataset_completo = False
 
-percorso_salvataggio_modelli = "C:/Users/matte/Documents/GitHub/HandClassifier/Modelli_allenati_addestramento_gaussiano"
-percorso_salvataggio_train_val = "C:/Users/matte/Documents/GitHub/HandClassifier/Prepared_data_gaussiano"
-percorso_salvataggio_dataset_completo = "C:/Users/matte/Documents/GitHub/HandClassifier/Prepared_data"
+percorso_salvataggio_modelli = os.path.join(base_dir, "Modelli_allenati_addestramento_gaussiano")
+percorso_salvataggio_train_val = os.path.join(base_dir, "Prepared_data_gaussiano")
+percorso_salvataggio_dataset_completo = os.path.join(base_dir, "Prepared_data")
+
+# Timeout settings
+svm_hyperparameter_tuning_timeout = 3600  # 1 hour
+
+# Ensure directories exist
+os.makedirs(percorso_salvataggio_modelli, exist_ok=True)
+os.makedirs(percorso_salvataggio_train_val, exist_ok=True)
+os.makedirs(percorso_salvataggio_dataset_completo, exist_ok=True)
 
 # Filter parameters
 tipo_filtro = "cheby2"
@@ -81,18 +93,34 @@ def vary_amplitude(signal, amp_range, change_rate):
     scaling_factors = amp_range[0] + (amp_range[1] - amp_range[0]) * 0.5 * (1 + np.sin(2 * np.pi * change_rate * time_vector / len(signal)))
     return signal * scaling_factors
 
-def balance_dataset(input_data, target_labels, method='smote'):
-    from imblearn.over_sampling import SMOTE
-    if method == 'smote':
-        smote = SMOTE()
-        balanced_data, balanced_labels = smote.fit_resample(input_data, target_labels)
-    else:
-        raise ValueError('Metodo non riconosciuto. Usa "smote".')
-    return balanced_data, balanced_labels
+@contextmanager
+def time_limit(seconds):
+    def signal_handler(signum, frame):
+        raise TimeoutError("Timed out!")
+    signal.signal(signal.SIGALRM, signal_handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
 
-# Load signals
-sig_aperture = pd.read_csv(percorso_dati_aperture, delimiter='\t', header=None).values[:, 1:]
-sig_chiusura = pd.read_csv(percorso_dati_chiusure, delimiter='\t', header=None).values[:, 1:]
+# Load signals with error handling
+try:
+    sig_aperture = pd.read_csv(percorso_dati_aperture, delimiter='\t', header=4, usecols=range(1, 6))
+    sig_chiusura = pd.read_csv(percorso_dati_chiusure, delimiter='\t', header=4, usecols=range(1, 6))
+except pd.errors.ParserError as e:
+    print(f"Error reading file: {e}")
+    # Optionally, inspect the file content here
+    with open(percorso_dati_aperture, 'r') as file:
+        lines = file.readlines()
+        for i, line in enumerate(lines[:10]):  # Display the first 10 lines
+            print(f"Line {i+1}: {line.strip()}")
+    raise
+
+# Convert to numpy array and remove the first column
+sig_aperture = sig_aperture.values
+sig_chiusura = sig_chiusura.values
+
 sig = np.concatenate((sig_aperture, sig_chiusura), axis=0)
 
 # Filter signals
@@ -100,24 +128,29 @@ n_channel = sig.shape[1]
 sig_filt = np.zeros_like(sig)
 
 for i in range(n_channel):
-    sos = signal.cheby2(4, 40, [f_taglio_basso, f_taglio_alta], btype='bandpass', fs=f_sample, output='sos')
-    sig_filt[:, i] = signal.sosfilt(sos, sig[:, i])
-    b_notch, a_notch = signal.iirnotch(f_notch, 30, f_sample)
-    sig_filt[:, i] = signal.filtfilt(b_notch, a_notch, sig_filt[:, i])
+    sos = sp_signal.cheby2(4, 40, [f_taglio_basso, f_taglio_alta], btype='bandpass', fs=f_sample, output='sos')
+    sig_filt[:, i] = sp_signal.sosfilt(sos, sig[:, i])
+    b_notch, a_notch = sp_signal.iirnotch(f_notch, 30, f_sample)
+    sig_filt[:, i] = sp_signal.filtfilt(b_notch, a_notch, sig_filt[:, i])
 
 envelope = np.zeros_like(sig_filt)
 
 for i in range(n_channel):
-    sos = signal.cheby2(4, 40, f_envelope, btype='low', fs=f_sample, output='sos')
-    envelope[:, i] = signal.sosfilt(sos, np.abs(sig_filt[:, i]))
+    sos = sp_signal.cheby2(4, 40, f_envelope, btype='low', fs=f_sample, output='sos')
+    envelope[:, i] = sp_signal.sosfilt(sos, np.abs(sig_filt[:, i]))
 
 # Standardize envelope signals
 scaler = StandardScaler()
 envelope_std = scaler.fit_transform(envelope)
 
-# Load labels
-label_data = loadmat(percorso_label_training)
-label_dataset_completo = label_data[list(label_data.keys())[-1]].ravel()
+# Load labels using h5py for MATLAB v7.3 files
+def loadmat_h5py(filename):
+    with h5py.File(filename, 'r') as f:
+        # Assuming the data you need is stored in the first dataset
+        return {k: np.array(v) for k, v in f.items()}
+
+label_data = loadmat_h5py(percorso_label_training)
+label_dataset_completo = label_data[list(label_data.keys())[0]].ravel()
 
 # Cut signal to match label length
 envelope_std = envelope_std[:len(label_dataset_completo), :]
@@ -145,32 +178,55 @@ if applica_data_augmentation:
     envelope_std = augmentedData
     label_dataset_completo = augmentedLabels
 
-# Balance dataset
-envelope_std, label_dataset_completo = balance_dataset(envelope_std, label_dataset_completo)
-
 # Split dataset into training and validation sets
 sig_train, sig_val, label_train, label_val = train_test_split(envelope_std, label_dataset_completo, train_size=rapporto_training_validation, stratify=label_dataset_completo)
 
-# Save training and validation sets
+print("Dimensione train set: ")
+print(sig_train.shape)
+
+# Save training and validation sets to CSV
 if salvataggio_train_val:
-    savemat(f"{percorso_salvataggio_train_val}/training_set.mat", {"sig_train": sig_train})
-    savemat(f"{percorso_salvataggio_train_val}/validation_set.mat", {"sig_val": sig_val})
-    savemat(f"{percorso_salvataggio_train_val}/label_train.mat", {"label_train": label_train})
-    savemat(f"{percorso_salvataggio_train_val}/label_val.mat", {"label_val": label_val})
+    np.savetxt(f"{percorso_salvataggio_train_val}/training_set.csv", sig_train, delimiter=",")
+    np.savetxt(f"{percorso_salvataggio_train_val}/validation_set.csv", sig_val, delimiter=",")
+    np.savetxt(f"{percorso_salvataggio_train_val}/label_train.csv", label_train, delimiter=",")
+    np.savetxt(f"{percorso_salvataggio_train_val}/label_val.csv", label_val, delimiter=",")
 
 # Train LDA
 if allena_lda:
     lda = LinearDiscriminantAnalysis(solver='eigen', shrinkage='auto', priors=None, n_components=None, store_covariance=True, tol=0.0001)
     lda.fit(sig_train, label_train)
+    print("Allenamento modello LDA terminato")
     if salva_modelli:
-        savemat(f"{percorso_salvataggio_modelli}/lda_model.mat", {"lda_model": lda})
+        lda_model_path = f"{percorso_salvataggio_modelli}/lda_model.json"
+        with open(lda_model_path, 'w') as f:
+            json.dump({'coef_': lda.coef_.tolist(), 'intercept_': lda.intercept_.tolist(), 'classes_': lda.classes_.tolist(), 'priors_': lda.priors_.tolist(), 'covariance_': lda.covariance_.tolist()}, f)
 
-# Train SVM (Note: Hyperparameter tuning is omitted for simplicity)
+# Hyperparameter tuning for SVM with time limit and parallel processing
 if allena_svm:
-    svm = SVC(kernel='rbf', C=21.344, gamma=0.55962)
-    svm.fit(sig_train, label_train)
-    if salva_modelli:
-        savemat(f"{percorso_salvataggio_modelli}/svm_model.mat", {"svm_model": svm})
+    param_grid = {
+        'C': [0.1, 1, 10, 100],
+        'gamma': [1, 0.1, 0.01, 0.001],
+        'kernel': ['linear', 'rbf', 'poly', 'sigmoid']
+    }
+    grid = GridSearchCV(SVC(), param_grid, refit=True, verbose=2, n_jobs=-1)  # Use all available cores
+    try:
+        with time_limit(svm_hyperparameter_tuning_timeout):
+            grid.fit(sig_train, label_train)
+            best_svm = grid.best_estimator_
+            print("Allenamento di un modello SVM terminato")
+            if salva_modelli:
+                svm_model_path = f"{percorso_salvataggio_modelli}/svm_model.json"
+                with open(svm_model_path, 'w') as f:
+                    json.dump({
+                        'support_vectors_': best_svm.support_vectors_.tolist(),
+                        'dual_coef_': best_svm.dual_coef_.tolist(),
+                        'intercept_': best_svm.intercept_.tolist(),
+                        'classes_': best_svm.classes_.tolist(),
+                        'best_params_': grid.best_params_
+                    }, f)
+    except TimeoutError:
+        print(f"Hyperparameter tuning for SVM exceeded {svm_hyperparameter_tuning_timeout} seconds and was stopped.")
+    print("Allenamento finale SVM terminato")
 
 # Train Neural Network using PyTorch
 if allena_rete_neurale:
@@ -209,6 +265,8 @@ if allena_rete_neurale:
         optimizer.step()
         if loss.item() < val_metrica_obiettivo:
             break
+
+    print("Allenamento modello NN terminato")
 
     if salva_modelli:
         torch.save(model.state_dict(), f"{percorso_salvataggio_modelli}/nn_model.pth")

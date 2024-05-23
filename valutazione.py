@@ -1,13 +1,15 @@
 import numpy as np
 import pandas as pd
-import scipy.signal as signal
-from scipy.io import loadmat, savemat
+import scipy.signal as sp_signal
+from scipy.io import loadmat
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.metrics import confusion_matrix, classification_report
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
+import h5py
+import json
 
 # General parameters
 mostra_grafici_segnali = False
@@ -18,18 +20,18 @@ mostra_risultati_complessivi = True
 
 classi = ['Rilassata', 'Apertura', 'Chiusura']
 
-percorso_segnale = "Prepared_data/test_set.mat"
+percorso_segnale = "Prepared_data/test_set_processato.mat"
 percorso_label = "Prepared_data/label_test.mat"
 nome_grafici = "Test set"
 
-preprocessa_segnale = True
+preprocessa_segnale = False
 
 # Evaluation parameters
 valuta_svm = False
 valuta_lda = True
-valuta_nn = False
+valuta_nn = True
 
-percorso_salvataggio_svm = "Modelli_allenati_addestramento/svm_model.mat"
+percorso_salvataggio_svm = "Modelli_allenati_addestramento_gaussiano/svm_model.json"
 percorso_salvataggio_lda = "Modelli_allenati_addestramento_gaussiano/lda_model.mat"
 percorso_salvataggio_nn = "Modelli_allenati_addestramento_gaussiano/nn_model.pth"
 
@@ -53,17 +55,31 @@ segnale_da_elaborare = 'prediction_lda_test'
 lunghezza_buffer_precedenti = 400
 lunghezza_buffer_successivi = 400
 
-# Load test signals and labels
-def load_mat_file(filepath):
-    data = loadmat(filepath)
-    var_names = list(data.keys())
-    if var_names:
-        return data[var_names[-1]]
-    else:
-        raise ValueError('No variable found in the file.')
+# Load test signals and labels using h5py for MATLAB v7.3 files
+def load_mat_file_h5py(filepath):
+    with h5py.File(filepath, 'r') as f:
+        var_names = list(f.keys())
+        if var_names:
+            return np.array(f[var_names[0]])
+        else:
+            raise ValueError('No variable found in the file.')
 
-test_signal = load_mat_file(percorso_segnale)
-label_test = load_mat_file(percorso_label)
+test_signal = load_mat_file_h5py(percorso_segnale)
+print("Dimensione test set: ", test_signal.shape)
+
+test_signal = test_signal.T
+
+label_test = load_mat_file_h5py(percorso_label)
+print("Dimensione originale label test set: ", label_test.shape)
+
+# Converti label_test in un array monodimensionale se necessario
+if label_test.ndim > 1:
+    label_test = label_test.ravel()
+
+print("Dimensione label test set dopo la conversione: ", label_test.shape)
+
+# Assicurati che label_test e test_signal abbiano lo stesso numero di campioni
+assert label_test.shape[0] == test_signal.shape[0], "Il numero di campioni in label_test e test_signal non corrisponde!"
 
 # Preprocess signal
 def preprocess_signal(signal, f_sample, f_taglio_basso, f_taglio_alta, f_notch, f_envelope, percH):
@@ -71,15 +87,15 @@ def preprocess_signal(signal, f_sample, f_taglio_basso, f_taglio_alta, f_notch, 
     sig_filt = np.zeros_like(signal)
 
     for i in range(n_channel):
-        sos = signal.cheby2(4, 40, [f_taglio_basso, f_taglio_alta], btype='bandpass', fs=f_sample, output='sos')
-        sig_filt[:, i] = signal.sosfilt(sos, signal[:, i])
-        b_notch, a_notch = signal.iirnotch(f_notch, 30, f_sample)
-        sig_filt[:, i] = signal.filtfilt(b_notch, a_notch, sig_filt[:, i])
+        sos = sp_signal.cheby2(4, 40, [f_taglio_basso, f_taglio_alta], btype='bandpass', fs=f_sample, output='sos')
+        sig_filt[:, i] = sp_signal.sosfilt(sos, signal[:, i])
+        b_notch, a_notch = sp_signal.iirnotch(f_notch, 30, f_sample)
+        sig_filt[:, i] = sp_signal.filtfilt(b_notch, a_notch, sig_filt[:, i])
 
     envelope = np.zeros_like(sig_filt)
     for i in range(n_channel):
-        sos = signal.cheby2(4, 40, f_envelope, btype='low', fs=f_sample, output='sos')
-        envelope[:, i] = signal.sosfilt(sos, np.abs(sig_filt[:, i]))
+        sos = sp_signal.cheby2(4, 40, f_envelope, btype='low', fs=f_sample, output='sos')
+        envelope[:, i] = sp_signal.sosfilt(sos, np.abs(sig_filt[:, i]))
 
     envelope_std = (envelope - np.mean(envelope)) / np.std(envelope)
     return envelope_std
@@ -108,10 +124,35 @@ def evalua_classificatore(label_val, prediction, mostra_cm, classi, nome_metodo,
     print('\n---------------------------\n')
     return cm, acc, precision, specificity, recall, f1
 
+# Load SVM model from JSON
+def load_svm_model_from_json(filepath):
+    with open(filepath, 'r') as f:
+        data = json.load(f)
+    svm_model = SVC(kernel='rbf')  # Default kernel; will be overwritten
+    svm_model.support_vectors_ = np.array(data['support_vectors_'])
+    svm_model.dual_coef_ = np.array(data['dual_coef_'])
+    svm_model.intercept_ = np.array(data['intercept_'])
+    svm_model._classes = np.array(data['classes_'])
+    svm_model.C = data['best_params_']['C']
+    svm_model.gamma = data['best_params_']['gamma']
+    svm_model.kernel = data['best_params_']['kernel']
+    return svm_model
+
+# Load LDA model from JSON
+def load_lda_model_from_json(filepath):
+    with open(filepath, 'r') as f:
+        data = json.load(f)
+    lda_model = LinearDiscriminantAnalysis(solver='eigen', shrinkage='auto')
+    lda_model.coef_ = np.array(data['coef_'])
+    lda_model.intercept_ = np.array(data['intercept_'])
+    lda_model.classes_ = np.array(data['classes_'])
+    lda_model.priors_ = np.array(data['priors_'])
+    lda_model.covariance_ = np.array(data['covariance_'])
+    return lda_model
+
 # Evaluation SVM
 if valuta_svm:
-    from sklearn.externals import joblib
-    svm_model = joblib.load(percorso_salvataggio_svm)
+    svm_model = load_svm_model_from_json(percorso_salvataggio_svm)
     prediction_svm_test = svm_model.predict(test_signal)
     evalua_classificatore(label_test, prediction_svm_test, mostra_cm, classi, "SVM", nome_grafici)
     if mostra_risultati_singoli:
@@ -130,8 +171,7 @@ if valuta_svm:
 
 # Evaluation LDA
 if valuta_lda:
-    from sklearn.externals import joblib
-    lda_model = joblib.load(percorso_salvataggio_lda)
+    lda_model = load_lda_model_from_json(percorso_salvataggio_lda)
     prediction_lda_test = lda_model.predict(test_signal)
     evalua_classificatore(label_test, prediction_lda_test, mostra_cm, classi, "LDA", nome_grafici)
     if mostra_risultati_singoli:
