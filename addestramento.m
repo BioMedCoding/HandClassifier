@@ -1,4 +1,4 @@
-% Inizializzazione
+%% Inizializzazione
 clear 
 close all
 clc
@@ -19,31 +19,30 @@ classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
 dati_da_processare = true;                          % Se true carica dati grezzi e preprocessa, altrimenti carica direttamente dati e label già pronti
 percorso_dati_preprocessati = "External_data/dataset_completo_preprocessato";
 percorso_label_preprocessati = "External_data/label_dataset_completo_preprocessato";
-applica_data_augmentation = true;
 
+applica_data_augmentation = true;
 applica_data_augmentation_rumore_gaussiano = false;
 livello_rumore_gaussiano = 0.01; 
-
 applica_data_augmentation_ampiezza_dinamica = true;
 amp_range = [0.7, 1.3];                             % Range di variazione da applicare
 change_rate = 5;                                    % Velocità di cambiamento dell'ampiezza
 % Finora meglio  amp_range = [0.7, 1.3]; | change_rate = 5;  
 
 
-allena_svm = false;                                  % Esegui la sezione di addestramento e testing SVM
+allena_svm = true;                                  % Esegui la sezione di addestramento e testing SVM
 allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
-allena_rete_neurale = false; 
+allena_rete_neurale = true; 
 
-rapporto_training_validation = 0.7;
+rapporto_training_validation = 0.01;
 numero_worker = 14; 
 
 salva_modelli = true;                               % Salva i modelli allenati      
-salvataggio_train_val = true;                       % Salva matrici contenenti training e validation set
+salvataggio_train_val = false;                       % Salva matrici contenenti training e validation set
 salvataggio_dataset_completo = false;               % Salva matrice contenente il dataset completo (già effettuato, pertanto disattivato)
 
-percorso_salvataggio_modelli = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento_gaussiano"; % Percorso dove salvare i modelli
-percorso_salvataggio_train_val = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_gaussiano";
-percorso_salvataggio_dataset_completo = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data";
+percorso_salvataggio_modelli = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento_low_data"; % Percorso dove salvare i modelli
+percorso_salvataggio_train_val = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
+percorso_salvataggio_dataset_completo = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 
@@ -67,22 +66,26 @@ visualisation = "no";                               % Mostra grafici filtraggio
 
 
 %%  ========================Parametri addestramento SVM ====================
-svm_parameter_hypertuning = false;                  % Abilita hypertuning automatico dei parametri, sfruttando anche parallel pool
-svm_calcolo_GPU = false;                            % Abilita l'addestramento dell'SVM tramite l'uso della GPU
-ore_esecuzione_massime = 3;                         % Numero massimo di ora per cui continuare l'hypertuning automatico dei parametri
+svm_parameter_hypertuning = true;                  % Abilita hypertuning automatico dei parametri, sfruttando anche parallel pool
+svm_calcolo_GPU = false;                           % Abilita l'addestramento dell'SVM tramite l'uso della GPU
+ore_esecuzione_massime = 0.25;                     % Numero massimo di ora per cui continuare l'hypertuning automatico dei parametri
 
-t_hyper = templateSVM('KernelFunction', 'rbf', 'KernelScale', 'auto');
+%t_hyper = templateSVM('KernelFunction', 'rbf', 'KernelScale', 'auto');
+t_hyper = templateSVM('KernelFunction', 'polynomial','PolynomialOrder', 3, 'KernelScale', 'auto');
 
 opts_hyp = struct('AcquisitionFunctionName', 'expected-improvement-plus', ...
     'UseParallel', true, ...
-    'MaxObjectiveEvaluations', 30, ... 
+    'MaxObjectiveEvaluations', 300, ... 
     'Verbose', 2, ...                                              
     'ShowPlots', true, ...                                         
     'SaveIntermediateResults', true, ...                           
     'MaxTime', ore_esecuzione_massime*3600);                       
 
-%t_single = templateSVM('KernelFunction', 'polynomial', 'PolynomialOrder', 2);
-t_single = templateSVM('KernelFunction', 'rbf', 'BoxConstraint', 21.344, 'KernelScale', 0.55962); % Valore migliore trovato durante hypertuning automatico, con onevsone
+%t_single = templateSVM('KernelFunction', 'polynomial', 'PolynomialOrder', 2, 'KernelScale', 10, 'Solver', 'ISDA');
+t_single = templateSVM('KernelFunction', 'rbf', 'KernelScale', 10, 'Solver', 'ISDA');
+%t_single = templateSVM('KernelFunction', 'rbf', 'BoxConstraint', 21.344, 'KernelScale', 0.55962); % Valore migliore trovato durante hypertuning automatico, con onevsone
+%t_single = templateSVM('KernelFunction', 'rbf', 'BoxConstraint', 48.242,
+%'KernelScale', 0.35358); % Hyper 2
 coding_single = 'onevsone'; % 'onevsone', 'onevsall'
 %% =========================================================================
 
@@ -172,6 +175,8 @@ end
 
 
 if dati_da_processare
+    fprintf('\nInizio import e process dati \n')
+    tic;
     % Import segnali aperture
     sig = readtable(percorso_dati_aperture,"Delimiter", '\t');
     %t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
@@ -336,14 +341,22 @@ if dati_da_processare
         xlabel('Campioni');
         ylabel('[a.u.]');
     end
+    elapsed_time = toc;
+    fprintf('   Termine import e process dati. Tempo necessario: %.2f secondi\n', elapsed_time);
+
 else  % Caso di import diretto di dati e label già processati
+    fprintf('\nInizio import dati \n')
+    tic;
     envelope_std = load(percorso_dati_preprocessati);
     label_dataset_completo = load(percorso_label_preprocessati);
+    elapsed_time = toc;
+    fprintf('   Termine import dati. Tempo necessario: %.2f secondi\n', elapsed_time);
 end
 %% Applicazione data augmentation
 
 if applica_data_augmentation
-
+    fprintf('\nInizio Data augmentation \n')
+    tic;
     % Salvataggio del segnale originale, per eventuali usi futuri
     envelope_std_originale = envelope_std;
 
@@ -391,21 +404,27 @@ if applica_data_augmentation
         hold on
         plot(augmentedLabels)
     end
-
+    elapsed_time = toc;
+    fprintf('   Termine Data augmentation. Tempo necessario: %.2f secondi\n', elapsed_time);
     % Assegna alla variabile i nomi previsti in seguito
     envelope_std = augmentedData;
     label_dataset_completo = augmentedLabels;
 end
 
-pause
+%pause
 
 %% Bilanciamento classi
+fprintf('\nInizio Bilanciamento classi \n')
+tic;
 [envelope_std, label_dataset_completo] = balance_dataset(envelope_std, label_dataset_completo, 'smote');
-
+elapsed_time = toc;
+fprintf('   Termine Bilanciamento classi. Tempo necessario: %.2f secondi\n', elapsed_time);
 %pause
 
 %% Divisione training_validation set
 
+fprintf('\nInizio Divisione training e validation set \n')
+tic;
 % Creazione indici per training e test
 num_samp = length(envelope_std(:,1));
 index_random = randperm(num_samp);
@@ -419,15 +438,19 @@ label_val = label_dataset_completo(validation_idx,:);
 
 % Salvataggio training e validation set
 if salvataggio_train_val
+    mkdir(percorso_salvataggio_train_val); 
     save(strcat(percorso_salvataggio_train_val,"/training_set"), "sig_train")
     save(strcat(percorso_salvataggio_train_val,"/validation_set"), "sig_val")
     save(strcat(percorso_salvataggio_train_val,"/label_train"), "label_train")
     save(strcat(percorso_salvataggio_train_val,"/label_val"), "label_val")
 end
+elapsed_time = toc;
+fprintf('   Termine Divisione training e validation set. Tempo necessario: %.2f secondi\n', elapsed_time);
 %% SVM - addestramento
 
 if allena_svm
-
+    fprintf('\nInizio allenamento SVM \n')
+    tic;
     if svm_parameter_hypertuning
         % Selezione se GPU o CPU
         if svm_calcolo_GPU
@@ -451,9 +474,11 @@ if allena_svm
             svm_model = fitcecoc(sig_train,label_train, 'Learners', t_single, 'Coding', coding_single);
         end
     end
-
+    elapsed_time = toc;
+    fprintf('   Termine allenamento SVM. Tempo necessario: %.2f secondi\n', elapsed_time);
     if salva_modelli
         % Salva il modello allenato in un file .mat
+        mkdir(percorso_salvataggio_modelli); 
         save(fullfile(percorso_salvataggio_modelli, 'svm_model.mat'), 'svm_model');
     end  
 end  
@@ -461,14 +486,19 @@ end
 %% LDA - addestramento
 
 if allena_lda
+
+    fprintf('\nInizio allenamento LDA \n')
+    tic;
     lda_model = fitcdiscr(sig_train,label_train,  'DiscrimType', discrimType);
     
     % Visualizza i coefficienti del modello
     %Mdl.Coeffs(1,2).Const    % Costante del decision boundary
     %Mdl.Coeffs(1,2).Linear   % Coefficienti lineari per il decision boundary
+    elapsed_time = toc;
+    fprintf('   Termine allenamento LDA. Tempo necessario: %.2f secondi\n', elapsed_time);
 
     if salva_modelli
-        % Salva il modello allenato in un file .mat
+        mkdir(percorso_salvataggio_modelli); 
         save(fullfile(percorso_salvataggio_modelli, 'lda_model.mat'), 'lda_model');
     end
 end  
@@ -478,6 +508,8 @@ end
 if allena_rete_neurale
     % Definizione architettura - sistema completo ma non testato
     % Definizione dei layer della rete neurale
+    fprintf('\n Inizio allenamento NN \n')
+    tic;
     if rete_custom
 
         % Al momento qui sotto non funziona ancora
@@ -576,10 +608,12 @@ if allena_rete_neurale
         % Allena
         [net, tr] = train(net, sig_train, label_train);
     
-        end
+    end
+    elapsed_time = toc;
+    fprintf('   Termine allenamento NN. Tempo necessario: %.2f secondi\n', elapsed_time);
 
     if salva_modelli
-            % Salva il modello allenato in un file .mat
+            mkdir(percorso_salvataggio_modelli); 
             save(fullfile(percorso_salvataggio_modelli, 'nn_model.mat'), 'net');
     end
 end

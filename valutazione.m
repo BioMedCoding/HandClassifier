@@ -34,13 +34,13 @@ warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning
 
 %% Selezione valutazioni da eseguire
 
-valuta_svm = false;
+valuta_svm = true;
 valuta_lda = true;
-valuta_nn = false;
+valuta_nn = true;
 
-percorso_salvataggio_svm = "Modelli_allenati_addestramento\svm_model.mat";
-percorso_salvataggio_lda = "Modelli_allenati_addestramento_gaussiano\lda_model.mat";
-percorso_salvataggio_nn = "Modelli_allenati_addestramento_gaussiano\nn_model.mat";
+percorso_salvataggio_svm = "Modelli_allenati_addestramento_low_data\svm_model.mat";
+percorso_salvataggio_lda = "Modelli_allenati_addestramento_low_data\lda_model.mat";
+percorso_salvataggio_nn = "Modelli_allenati_addestramento_low_data\nn_model.mat";
 
 prediction_parallel = false;
 %% =========================================================================
@@ -65,7 +65,7 @@ visualisation = "no";                               % Mostra grafici filtraggio
 applica_postprocess_multiplo = false;                         % Applica funzion di postprocess sul vettore di classificazione
 
 applica_postprocess_singolo = true;
-segnale_da_elaborare = 'prediction_lda_test';                             
+segnale_da_elaborare = 'prediction_svm_test';                             
 
 lunghezza_buffer_precedenti = 400;  % 400 ha dato valori migliori
 lunghezza_buffer_successivi = 400;
@@ -89,6 +89,9 @@ end
 
 %% Import segnali ed eventuale preprocess
 
+fprintf('\nInizio import e process dati \n')
+tic;
+
 data = load(percorso_segnale);
 varNames = fieldnames(data);
 
@@ -102,12 +105,17 @@ else
 end
 
 if preprocessa_segnale
+    fprintf('\n      Inizio filtraggio segnale \n')
+    tic;
     n_channel = length(test_signal(1,:));
     sig_filt= zeros(length(test_signal),n_channel);
     
     for i=1:n_channel
         sig_filt(:,i) = filter_general(test_signal(:,i),tipo_filtro,f_sample,"fL",f_taglio_basso,"fH",f_taglio_alta,"fN",f_notch,"visualisation",visualisation);
     end
+
+    elapsed_time = toc;
+    fprintf('         Termine filtraggio segnale. Tempo necessario: %.2f secondi\n', elapsed_time);
 
     if mostra_segnale_per_canale
 
@@ -148,11 +156,17 @@ if preprocessa_segnale
     end
 
     % Creazione inviluppo
+    fprintf('\n      Inizio creazione inviluppo segnale \n')
+    tic;
+
     envelope = zeros(length(sig_filt),n_channel);
 
     for i=1:n_channel
         envelope(:,i) = filter_general(abs(sig_filt(:,i)),tipo_filtro,f_sample,"fH",f_envelope,"percH",percH);   
     end
+
+    elapsed_time = toc;
+    fprintf('         Termine creazione inviluppo segnale. Tempo necessario: %.2f secondi\n', elapsed_time);
 
     if mostra_grafici_segnali
         figure
@@ -163,7 +177,11 @@ if preprocessa_segnale
     end
 
     % Standardizza i valori
+    fprintf('\n      Inizio standardizzazione segnale \n')
+    tic;
     envelope_std = (envelope-mean(envelope))./std(envelope);
+    elapsed_time = toc;
+    fprintf('         Termine standardizzazione segnale. Tempo necessario: %.2f secondi\n', elapsed_time);
     
     if mostra_segnale_per_canale
         figure;
@@ -229,11 +247,16 @@ else
     disp('Nessuna variabile trovata nel file.');
 end
 
+elapsed_time = toc;
+fprintf('   Termine import e process dati. Tempo necessario: %.2f secondi\n', elapsed_time);
 
 
 %% Valutazione SVM
 
+
 if valuta_svm
+    fprintf('\nInizio valutazione SVM \n')
+    tic;
 
     load(percorso_salvataggio_svm)
     metodo = "SVM";
@@ -241,6 +264,9 @@ if valuta_svm
     
     prediction_svm_test = predict(svm_model, test_signal);
     
+    elapsed_time = toc;
+    fprintf('   Termine valutazione SVM. Tempo necessario: %.2f secondi\n', elapsed_time);
+
     [CM_svm_test, acc_svm_test, prec_svm_test, spec_svm_test, sens_svm_test, f1_svm_test] = evaluaClassificatore(label_test, prediction_svm_test, mostra_cm, classi, metodo, set);
     
     if mostra_risultati_singoli
@@ -270,11 +296,17 @@ end
 
 if valuta_lda
 
+    fprintf('\nInizio valutazione LDA \n')
+    tic;
+
     load(percorso_salvataggio_lda)
     metodo = "LDA";
     set = nome_grafici;
 
     prediction_lda_test = predict(lda_model, test_signal);
+
+    elapsed_time = toc;
+    fprintf('   Termine valutazione LDA. Tempo necessario: %.2f secondi\n', elapsed_time);
 
     [CM_lda_test, acc_lda_test, prec_lda_test, spec_lda_test, sens_lda_test, f1_lda_test] = evaluaClassificatore(label_test, prediction_lda_test, mostra_cm, classi, metodo, set);
 
@@ -300,6 +332,9 @@ end
 
 if valuta_nn
 
+    fprintf('\nInizio valutazione NN \n')
+    tic;
+
     load(percorso_salvataggio_nn)
 
     set = nome_grafici;
@@ -321,6 +356,9 @@ if valuta_nn
     % Riporta alle label convenzionali
     prediction_nn_test = prediction_nn_test'-1; 
     metodo = "NN";
+
+    elapsed_time = toc;
+    fprintf('   Termine valutazione NN. Tempo necessario: %.2f secondi\n', elapsed_time);
     
     [CM_nn_test, acc_nn_test, prec_nn_test, spec_nn_test, sens_nn_test, f1_nn_test] = evaluaClassificatore(label_test, prediction_nn_test, mostra_cm, classi, metodo, set); 
   
@@ -381,6 +419,9 @@ end
 %% Applicazione post-process
 
 if applica_postprocess_singolo
+    
+    fprintf('\nInizio postprocess 1 \n')
+    tic;
 
     eval(['predizione_originale = ', segnale_da_elaborare, ';']);  % Permette di scegliere tramite la stringa all'inizio il segnale da postprocessare
 
@@ -418,10 +459,17 @@ if applica_postprocess_singolo
             end
         end
     end
+
+    elapsed_time = toc;
+    fprintf('   Termine postprocess 1. Tempo necessario: %.2f secondi\n', elapsed_time);
     
     % Postprocess 2
     
     % Definizione parametri iniziali
+
+    fprintf('\nInizio postprocess 1 \n')
+    tic;
+
     coda = 1;
     buffer_precedenti = [];
     buffer_futuri = [];
@@ -453,6 +501,9 @@ if applica_postprocess_singolo
             end
         end
     end
+
+    elapsed_time = toc;
+    fprintf('   Termine postprocess 2. Tempo necessario: %.2f secondi\n', elapsed_time);
 
     if mostra_risultati_singoli
         figure
