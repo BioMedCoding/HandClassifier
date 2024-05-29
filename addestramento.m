@@ -1,7 +1,7 @@
 %% Inizializzazione
+clc
 clear 
 close all
-clc
 
 
 %% ======================== Parametri generali script ======================
@@ -29,8 +29,8 @@ change_rate = 5;                                    % Velocità di cambiamento d
 % Finora meglio  amp_range = [0.7, 1.3]; | change_rate = 5;  
 
 
-allena_svm = true;                                  % Esegui la sezione di addestramento e testing SVM
-allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
+allena_svm = false;                                  % Esegui la sezione di addestramento e testing SVM
+allena_lda = false;                                  % Esegui la sezione di addestramento e testing LDA
 allena_rete_neurale = true; 
 
 rapporto_training_validation = 0.01;
