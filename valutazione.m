@@ -28,6 +28,9 @@ nome_grafici = "Test set";                           % Nome che viene mostrato n
 preprocessa_segnale = true;
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
+
+mu_train = [44.4870    9.8573    9.0265   16.4091   19.7749];
+sigma_train = [57.9282   11.2726   11.4219   21.4592   24.7809];
 %% =========================================================================
 
 
@@ -186,7 +189,8 @@ if preprocessa_segnale
     % Standardizza i valori
     fprintf('\n      Inizio standardizzazione segnale \n')
     tic;
-    envelope_std = (envelope-mean(envelope))./std(envelope);
+    %envelope_std = (envelope-mean(envelope))./std(envelope);
+    envelope_std = (envelope-mu_train)./sigma_train;
     elapsed_time = toc;
     fprintf('         Termine standardizzazione segnale. Tempo necessario: %.2f secondi\n', elapsed_time);
     

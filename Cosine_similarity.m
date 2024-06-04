@@ -1,7 +1,7 @@
 
 %% Inizializzazione
 clear 
-%close all
+close all
 clc
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
@@ -222,10 +222,10 @@ end
 % Standardizzazione
 
 % Usando valori suoi
-test_data = (test_data-mean(test_data))./std(test_data);  
+%test_data = (test_data-mean(test_data))./std(test_data);  
 
 % Usando valori training
-%test_data = (test_data-mu)./sigma;
+test_data = (test_data-mu)./sigma;
 
 
 
