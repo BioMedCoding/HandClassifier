@@ -1,6 +1,6 @@
 %% Inizializzazione
 clc
-clear 
+%clear 
 close all
 
 
@@ -28,19 +28,24 @@ amp_range = [0.7, 1.3];                             % Range di variazione da app
 change_rate = 5;                                    % Velocità di cambiamento dell'ampiezza
 % Finora meglio  amp_range = [0.7, 1.3]; | change_rate = 5;  
 
+bilancia_classi = true;
+metodo_bilanciamento_classi = 'smote';
 
-allena_svm = false;                                  % Esegui la sezione di addestramento e testing SVM
-allena_lda = false;                                  % Esegui la sezione di addestramento e testing LDA
+allena_svm = true;                                  % Esegui la sezione di addestramento e testing SVM
+allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
 allena_rete_neurale = true; 
 
-rapporto_training_validation = 0.01;
+rapporto_training_validation = 0.7;
+% Con rapporto_training_validation = 0.00005 si usano 61 campioni di
+% segnale, ovvero 30 ms di tempo di acquisizione
+
 numero_worker = 14; 
 
 salva_modelli = true;                               % Salva i modelli allenati      
 salvataggio_train_val = false;                       % Salva matrici contenenti training e validation set
 salvataggio_dataset_completo = false;               % Salva matrice contenente il dataset completo (già effettuato, pertanto disattivato)
 
-percorso_salvataggio_modelli = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento_low_data"; % Percorso dove salvare i modelli
+percorso_salvataggio_modelli = strcat("C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento_dataAug","\",num2str(rapporto_training_validation)); % Percorso dove salvare i modelli
 percorso_salvataggio_train_val = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
 percorso_salvataggio_dataset_completo = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
 
@@ -66,7 +71,7 @@ visualisation = "no";                               % Mostra grafici filtraggio
 
 
 %%  ========================Parametri addestramento SVM ====================
-svm_parameter_hypertuning = true;                  % Abilita hypertuning automatico dei parametri, sfruttando anche parallel pool
+svm_parameter_hypertuning = false;                  % Abilita hypertuning automatico dei parametri, sfruttando anche parallel pool
 svm_calcolo_GPU = false;                           % Abilita l'addestramento dell'SVM tramite l'uso della GPU
 ore_esecuzione_massime = 0.25;                     % Numero massimo di ora per cui continuare l'hypertuning automatico dei parametri
 
@@ -97,7 +102,9 @@ coding_single = 'onevsone'; % 'onevsone', 'onevsall'
 rete_custom = false;                % Abilita l'utilzzo della rete neurale custom made
 
 max_epoche = 500;                   % Numero massimo di epoche di allenamento della rete neurale
-val_metrica_obiettivo = 0.00005;    % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
+val_metrica_obiettivo = 0.000005;    % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
+
+validation_check = 20;
       
 lr = 0.02;                          % Learning rate
 momentum = 0.9;                     % Momento durante l'allenamento
@@ -414,11 +421,14 @@ end
 %pause
 
 %% Bilanciamento classi
-fprintf('\nInizio Bilanciamento classi \n')
-tic;
-[envelope_std, label_dataset_completo] = balance_dataset(envelope_std, label_dataset_completo, 'smote');
-elapsed_time = toc;
-fprintf('   Termine Bilanciamento classi. Tempo necessario: %.2f secondi\n', elapsed_time);
+
+if bilancia_classi
+    fprintf('\nInizio Bilanciamento classi \n')
+    tic;
+    [envelope_std, label_dataset_completo] = balance_dataset(envelope_std, label_dataset_completo, metodo_bilanciamento_classi);
+    elapsed_time = toc;
+    fprintf('   Termine Bilanciamento classi. Tempo necessario: %.2f secondi\n', elapsed_time);
+end
 %pause
 
 %% Divisione training_validation set
@@ -556,6 +566,7 @@ if allena_rete_neurale
             net.trainFcn = train_function;  
             net.trainParam.epochs = max_epoche;
             net.trainParam.goal = val_metrica_obiettivo;
+            net.trainParam.max_fail = validation_check;
             if strcmp(train_function, 'traingdx')  
                 net.trainParam.lr = lr;
                 net.trainParam.mc = momentum;
@@ -572,6 +583,7 @@ if allena_rete_neurale
             net.trainFcn = train_function;  
             net.trainParam.epochs = max_epoche;
             net.trainParam.goal = val_metrica_obiettivo;
+            net.trainParam.max_fail = validation_check;
             if strcmp(train_function, 'traingdx')
                 net.trainParam.lr = lr;
                 net.trainParam.mc = momentum;
@@ -589,6 +601,7 @@ if allena_rete_neurale
             net.trainFcn = train_function;  
             net.trainParam.epochs = max_epoche;
             net.trainParam.goal = val_metrica_obiettivo;
+            net.trainParam.max_fail = validation_check;
             if strcmp(train_function, 'traingdx') 
                 net.trainParam.lr = lr;
                 net.trainParam.mc = momentum;

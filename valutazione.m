@@ -1,6 +1,6 @@
 %% Inizializzazione
-clear 
-close all
+%clear 
+%close all
 %clc
 
 
@@ -16,7 +16,7 @@ close all
 mostra_grafici_segnali = false;  
 mostra_segnale_per_canale = false;
 mostra_cm = false;                                    % Mostra le CM dei vari classificatori
-mostra_risultati_singoli = true;                     % Mostra confronto singolo classificatore - Ground Truth
+mostra_risultati_singoli = false;                     % Mostra confronto singolo classificatore - Ground Truth
 mostra_risultati_complessivi = true;                 % Mostra confronto tutti i classificatori - Ground Truth
 
 classi = {'Rilassata', 'Apertura','Chiusura'};       % Nomi assegnati alle classi
@@ -39,11 +39,16 @@ valuta_svm = true;
 valuta_lda = true;
 valuta_nn = true;
 
-percorso_salvataggio_svm = "Modelli_allenati_addestramento_low_data\svm_model.mat";
-percorso_salvataggio_lda = "Modelli_allenati_addestramento_low_data\lda_model.mat";
-percorso_salvataggio_nn = "Modelli_allenati_addestramento_low_data\nn_model.mat";
+percorso_salvataggio_svm = "Modelli_allenati_addestramento_dataAug\0.1\svm_model.mat";
+percorso_salvataggio_lda = "Modelli_allenati_addestramento_dataAug\0.1\lda_model.mat";
+percorso_salvataggio_nn = "Modelli_allenati_addestramento_dataAug\0.1\nn_model.mat";
+
+% percorso_salvataggio_svm = "Modelli_allenati_addestramento_nodataAug_noSMOTE\0.7\svm_model.mat";
+% percorso_salvataggio_lda = "Modelli_allenati_addestramento_nodataAug_noSMOTE\0.7\lda_model.mat";
+% percorso_salvataggio_nn = "Modelli_allenati_addestramento_nodataAug_noSMOTE\0.7\nn_model.mat";
 
 prediction_parallel = false;
+
 %% =========================================================================
 
 
@@ -63,10 +68,11 @@ visualisation = "no";                               % Mostra grafici filtraggio
 
 
 % =========================== Parametri postprocess =======================
+
 applica_postprocess_multiplo = false;                         % Applica funzion di postprocess sul vettore di classificazione
 
 applica_postprocess_singolo = true;
-segnale_da_elaborare = 'prediction_svm_test';                             
+segnale_da_elaborare = 'prediction_nn_test';                             
 
 lunghezza_buffer_precedenti = 400;  % 400 ha dato valori migliori
 lunghezza_buffer_successivi = 400;
@@ -268,7 +274,7 @@ if valuta_svm
     elapsed_time = toc;
     fprintf('   Termine valutazione SVM. Tempo necessario: %.2f secondi\n', elapsed_time);
 
-    [CM_svm_test, acc_svm_test, prec_svm_test, spec_svm_test, sens_svm_test, f1_svm_test] = evaluaClassificatore(label_test, prediction_svm_test, mostra_cm, classi, metodo, set);
+    [CM_svm_test, acc_svm_test, prec_svm_test, spec_svm_test, sens_svm_test, f1_svm_test, sens_media_svm, spec_media_svm] = evaluaClassificatore(label_test, prediction_svm_test, mostra_cm, classi, metodo, set);
     
     if mostra_risultati_singoli
         figure;
@@ -309,7 +315,7 @@ if valuta_lda
     elapsed_time = toc;
     fprintf('   Termine valutazione LDA. Tempo necessario: %.2f secondi\n', elapsed_time);
 
-    [CM_lda_test, acc_lda_test, prec_lda_test, spec_lda_test, sens_lda_test, f1_lda_test] = evaluaClassificatore(label_test, prediction_lda_test, mostra_cm, classi, metodo, set);
+    [CM_lda_test, acc_lda_test, prec_lda_test, spec_lda_test, sens_lda_test, f1_lda_test, sens_media_lda, spec_media_lda] = evaluaClassificatore(label_test, prediction_lda_test, mostra_cm, classi, metodo, set);
 
     if mostra_risultati_singoli
         figure;
@@ -361,7 +367,7 @@ if valuta_nn
     elapsed_time = toc;
     fprintf('   Termine valutazione NN. Tempo necessario: %.2f secondi\n', elapsed_time);
     
-    [CM_nn_test, acc_nn_test, prec_nn_test, spec_nn_test, sens_nn_test, f1_nn_test] = evaluaClassificatore(label_test, prediction_nn_test, mostra_cm, classi, metodo, set); 
+    [CM_nn_test, acc_nn_test, prec_nn_test, spec_nn_test, sens_nn_test, f1_nn_test, sens_media_nn, spec_media_nn] = evaluaClassificatore(label_test, prediction_nn_test, mostra_cm, classi, metodo, set); 
   
     if mostra_risultati_singoli
         figure;
@@ -464,6 +470,8 @@ if applica_postprocess_singolo
     elapsed_time = toc;
     fprintf('   Termine postprocess 1. Tempo necessario: %.2f secondi\n', elapsed_time);
     
+
+
     % Postprocess 2
     
     % Definizione parametri iniziali
@@ -519,7 +527,7 @@ if applica_postprocess_singolo
     metodo = "Prediction processate";
     set = "Test";
 
-    [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate] = evaluaClassificatore(label_test, predizione_processata, mostra_cm, classi, metodo, set);
+    [CM_prediction_processate, acc_prediction_processate, prec_prediction_processate, spec_prediction_processate, sens_prediction_processate, f1_prediction_processate, sens_media_processate, spec_media_processate] = evaluaClassificatore(label_test, predizione_processata, mostra_cm, classi, metodo, set);
     metodo = "Prediction processate 2";
     [CM_prediction_processate2, acc_prediction_processate2, prec_prediction_processate2, spec_prediction_processate2, sens_prediction_processate2, f1_prediction_processate2] = evaluaClassificatore(label_test, predizione_processata2, mostra_cm, classi, metodo, set);
     
@@ -555,11 +563,157 @@ if applica_postprocess_singolo
     end
 end
 
+%% Plot temporanei
+figure
+hold on
+grid on
+title('Sensibilità media predittori')
+plot(sens_media_lda, 'o');
+plot(sens_media_svm, 'x');
+plot(sens_media_nn, '*');
+plot(sens_media_processate, '*')
+legend('LDA', 'SVM', 'NN', 'NN processata')
+ylabel('Sensibilità')
+
+figure
+hold on
+grid on
+title('Specificità media predittori')
+plot(spec_media_lda, 'o');
+plot(spec_media_svm, 'x');
+plot(spec_media_nn, '*');
+plot(spec_media_processate, '*')
+legend('LDA', 'SVM', 'NN', 'NN processata')
+ylabel('Specificità')
+
+%% Creazione vettori per test consecutivi
+% spec_lda_media = [];
+% spec_svm_media = [];
+% spec_nn_media = [];
+% spec_post_media = [];
+% spec_post2_media = [];
+
+% sens_lda_media = [];
+% sens_svm_media = [];
+% sens_nn_media = [];
+% sens_post_media = [];
+% sens_post2_media = [];
+
+clear set
+
+% spec_lda_media = horzcat(spec_lda_media, mean(spec_lda_test));
+% spec_svm_media = horzcat(spec_svm_media, mean(spec_svm_test));
+% spec_nn_media = horzcat(spec_nn_media, mean(spec_nn_test));
+% spec_post_media = horzcat(spec_post_media, mean(spec_prediction_processate));
+% spec_post2_media = horzcat(spec_post2_media, mean(spec_prediction_processate2));
+% 
+% 
+% sens_lda_media = horzcat(sens_lda_media, mean(sens_lda_test));
+% sens_svm_media = horzcat(sens_svm_media, mean(sens_svm_test));
+% sens_nn_media = horzcat(sens_nn_media, mean(sens_nn_test));
+% sens_post_media = horzcat(sens_post_media, mean(sens_prediction_processate));
+% sens_post2_media = horzcat(sens_post2_media, mean(sens_prediction_processate2));
+% 
+% percentuale_dati = [0.00005 0.0001 0.001 0.01 0.1].*100;
+
+%% Confronto sistemi
+% figure
+% hold on
+% grid on
+% title("Sensibilità media sistemi - Test set")
+% plot(sens_lda_media, 'o');
+% plot(sens_svm_media, 'x');
+% plot(sens_nn_media, '*')
+% xlabel("% di dati destinati al training set")
+% ylabel("Sensibilità");
+% legend("LDA","SVM", "PatterNet")
+% set(gca, 'XScale', 'log')
+
+% figure
+% hold on
+% grid on
+% title("Sensibilità media sistemi - Test set")
+% plot(percentuale_dati,sens_lda_media);
+% plot(percentuale_dati,sens_svm_media);
+% plot(percentuale_dati,sens_nn_media)
+% xlabel("% di dati destinati al training set")
+% ylabel("Sensibilità");
+% legend("LDA","SVM", "PatterNet")
+% set(gca, 'XScale', 'log')
+% 
+
+% figure
+% hold on
+% grid on
+% title("Specificità media sistemi - Test set")
+% plot(spec_lda_media, 'o');
+% plot(spec_svm_media, 'x');
+% plot(spec_nn_media, '*')
+% xlabel("% di dati destinati al training set")
+% ylabel("Specificità");
+% legend("LDA","SVM", "PatterNet")
+% set(gca, 'XScale', 'log')
+
+% figure
+% hold on
+% grid on
+% title("Specificità media sistemi - Test set")
+% plot(percentuale_dati,spec_lda_media);
+% plot(percentuale_dati,spec_svm_media);
+% plot(percentuale_dati,spec_nn_media)
+% xlabel("% di dati destinati al training set")
+% ylabel("Specificità");
+% legend("LDA","SVM", "PatterNet")
+% set(gca, 'XScale', 'log')
 
 
+%% Confronto con e senza postprocess
+% figure()
+% hold on
+% grid on
+% title("Specificità media NN con e senza postProcess - Test set")
+% plot(percentuale_dati,spec_svm_media);
+% plot(percentuale_dati,spec_post_media);
+% plot(percentuale_dati,spec_post2_media)
+% xlabel("% di dati destinati al training set")
+% ylabel("Specificità");
+% legend("NN originale","NN postprocess", "NN postprocess 2")
+% set(gca, 'XScale', 'log')
+% 
+% figure()
+% hold on
+% grid on
+% title("Sensibilità media NN con e senza postProcess - Test set")
+% plot(percentuale_dati,sens_svm_media);
+% plot(percentuale_dati,sens_post_media);
+% plot(percentuale_dati,sens_post2_media)
+% xlabel("% di dati destinati al training set")
+% ylabel("Sensibilità");
+% legend("NN originale","NN postprocess", "NN postprocess 2")
+% set(gca, 'XScale', 'log')
 
+%% Confronto con e senza data augmentation
+% figure
+% hold on
+% grid on
+% title("Sensibilità media sistemi - Test set")
+% plot(1, sens_lda_media(1), 'o', 1, sens_lda_media(2), 'x');
+% plot(2, sens_svm_media(1), 'o', 2, sens_svm_media(2), 'x');
+% plot(3, sens_nn_media(1), 'o', 3, sens_nn_media(2), 'x')
+% ylabel("Sensibilità");
+% legend("Senza", "Con")
+% 
+% figure
+% hold on
+% grid on
+% title("Specificità media sistemi - Test set")
+% plot(1, spec_lda_media(1), 'o', 1, spec_lda_media(2), 'x');
+% plot(2, spec_svm_media(1), 'o', 2, spec_svm_media(2), 'x');
+% plot(3, spec_nn_media(1), 'o', 3, spec_nn_media(2), 'x')
+% ylabel("Specificità");
+% legend("Senza", "Con")
 %%  Funzioni usate
-function [CM, accuratezza, precisione, specificita, sensibilita, f1Score] = evaluaClassificatore(label_val, prediction, mostra_cm, classi, nomeMetodo, nomeSet)
+function [CM, accuratezza, precisione, specificita, sensibilita, f1Score, sens_media, spec_media] = evaluaClassificatore(label_val, prediction, mostra_cm, classi, nomeMetodo, nomeSet)
     
     CM = confusionmat(label_val, prediction);
 
@@ -595,9 +749,14 @@ function [CM, accuratezza, precisione, specificita, sensibilita, f1Score] = eval
     total = sum(CM(:));
     accuratezza = sum(diag(CM)) / total;
 
+    sens_media = mean(sensibilita);
+    spec_media = mean(specificita);
+
     % Stampa delle metriche per ogni classe
     fprintf('\n---------------------------\n');
     fprintf('Accuratezza complessiva %s - %s: %.2f%%\n', nomeMetodo, nomeSet, accuratezza * 100);
+    fprintf('Sensibilità complessiva %s - %s: %.2f%%\n', nomeMetodo, nomeSet, sens_media * 100);
+    fprintf('Specificità complessiva %s - %s: %.2f%%\n\n', nomeMetodo, nomeSet, spec_media * 100);
     fprintf('%-10s %-12s %-12s %-12s %-12s\n', 'Classe', 'Precisione', 'Specificità', 'Sensibilità', 'F1 Score');
 
     for i = 1:numClassi
