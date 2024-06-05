@@ -20,10 +20,10 @@ generalParameters.dati_da_processare = true;                          % Se true 
 generalParameters.percorso_dati_preprocessati = "External_data/dataset_completo_preprocessato";
 generalParameters.percorso_label_preprocessati = "External_data/label_dataset_completo_preprocessato";
 
-generalParameters.applica_data_augmentation = true;
+generalParameters.applica_data_augmentation = false;
 generalParameters.applica_data_augmentation_rumore_gaussiano = false;
 generalParameters.livello_rumore_gaussiano = 0.01; 
-generalParameters.applica_data_augmentation_ampiezza_dinamica = true;
+generalParameters.applica_data_augmentation_ampiezza_dinamica = false;
 generalParameters.amp_range = [0.7, 1.3];                             % Range di variazione da applicare
 generalParameters.change_rate = 5;                                    % Velocità di cambiamento dell'ampiezza
 % Finora meglio  amp_range = [0.7, 1.3]; | change_rate = 5;  
@@ -35,7 +35,7 @@ generalParameters.allena_svm = true;                                  % Esegui l
 generalParameters.allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
 generalParameters.allena_rete_neurale = true; 
 
-generalParameters.rapporto_training_validation = 0.0001;
+generalParameters.rapporto_training_validation = 0.001;
 % Con rapporto_training_validation = 0.00005 si usano 61 campioni di
 % segnale, ovvero 30 ms di tempo di acquisizione
 
@@ -45,7 +45,7 @@ generalParameters.salva_modelli = true;                               % Salva i 
 generalParameters.salvataggio_train_val = false;                       % Salva matrici contenenti training e validation set
 generalParameters.generalParameters.salvataggio_dataset_completo = false;               % Salva matrice contenente il dataset completo (già effettuato, pertanto disattivato)
 
-generalParameters.percorso_salvataggio_modelli = strcat("C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento_dataAug","\",num2str(generalParameters.rapporto_training_validation)); % Percorso dove salvare i modelli
+%generalParameters.percorso_salvataggio_modelli = strcat("C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento_dataAug","\",num2str(generalParameters.rapporto_training_validation)); % Percorso dove salvare i modelli
 generalParameters.percorso_salvataggio_train_val = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
 generalParameters.percorso_salvataggio_dataset_completo = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
 
@@ -101,17 +101,16 @@ trainParametersSVM.classes = {'Rilassata', 'Apertura','Chiusura'};
 
 %%  ========================Parametri addestramento NN =====================
 
-rete_custom = false;                % Abilita l'utilzzo della rete neurale custom made
+%trainParametersNN.rete_custom = false;                % Abilita l'utilzzo della rete neurale custom made
+trainParametersNN.savePath =  "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati\";
+trainParametersNN.trainingRepetitions = 2;
+trainParametersNN.showCM = false;
+trainParametersNN.showText = false;
+trainParametersNN.saveAllModel = false;
 
-max_epoche = 500;                   % Numero massimo di epoche di allenamento della rete neurale
-val_metrica_obiettivo = 0.000005;    % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
+trainParametersNN.layer = [5 3];
 
-validation_check = 20;
-      
-lr = 0.02;                          % Learning rate
-momentum = 0.9;                     % Momento durante l'allenamento
-
-train_function = 'trainscg';        % Funzione di training della rete neurale
+trainParametersNN.trainFunction = 'trainscg';        % Funzione di training della rete neurale
         % Le funzioni di training possibili sono 
         % 'trainlm': Rapida discesa, risultati finali simili ma nel test perde complatamente l'aperatura
         % 'traingd': Discesa del gradiente estremamente lenta, prestazioni scadenti dopo 500 epoche
@@ -120,34 +119,28 @@ train_function = 'trainscg';        % Funzione di training della rete neurale
         % 'trainrp': Discesa del gradiente molto rapida e ottima velocità, da lavorarci meglio
         % 'trainscg': Criterio benchmark, da seguire come riferimento per il momento
 
-neuron_function = 'logsig'; % 'tansig', 'logsig', 'purelin', 'poslin', 'softmax'
+trainParametersNN.performanceFunction = 'crossentropy';
+
+
+trainParametersNN.neuronFunction = 'logsig'; % 'tansig', 'logsig', 'purelin', 'poslin', 'softmax'
         % 'tansig': 85.09% accuretezza processata, 59.43 peggiore (sensibilità 3)
         % 'logsig': 86.7% accuratezza processata, 62.77 peggiore (sensibilità 3)
         % 'purelin': 82.76% accuratezza processata, 55 peggiore (sensibilità 3)
         % 'poslin': 75.12% accuretezza processata, 45.7 peggiore (sensibilità 3)
         % 'softmax': no, peggiore
 
-num_layer = 3;
-        % 1  layer da 5: 86.33% accuretazze complessiva (postProcess), 57.54 peggiore (sensibilità 3) 500 epoche
-        % 3 layer (10, 5, 3): 87.8% accuretezza complessiva (postProcess), 64.01 peggiore (sensibilità 3) 500 epoche
-        % 3 layer (10, 5, 3): 86.78% accuretezza complessiva (postProcess), 59.83 peggiore (sensibilità 3) 1000 epoche arrestato prima 
+trainParametersNN.outputLayerFunction = 'softmax';
+
+trainParametersNN.maxEpochs = 500;                   % Numero massimo di epoche di allenamento della rete neurale
+trainParametersNN.trainGoal = 0.000005;    % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
+
+trainParametersNN.maxFailure = 50;
+      
+trainParametersNN.lr = 0.02;                          % Learning rate
+trainParametersNN.momentum = 0.9;                     % Momento durante l'allenamento
 
 % Definizione del numero di neuroni per layer in base alla struttura
 % selezionata della rete
-if num_layer == 1
-    layer1 = 5;
-end
-
-if num_layer == 2
-    layer1 = 5;
-    layer2 = 3;
-end
-
-if num_layer == 3
-    layer1 = 10;                     
-    layer2 = 5;                        
-    layer3 = 3;
-end
 %% =========================================================================
 
 
@@ -165,7 +158,7 @@ trainParametersLDA.discriminant = 'quadratic';
         % 'pseudoquadratic': 75.25%, 48.62 sensibilità 3
 
 trainParametersLDA.saveAllModel = false;
-trainParametersLDA.savePath = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati\SVM";
+trainParametersLDA.savePath = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati";
 trainParametersLDA.trainingRepetitions = 2;
 
 trainParametersLDA.showCM = false;
@@ -322,7 +315,6 @@ if generalParameters.dati_da_processare
     %envelope_std = (sig_filt-mean(sig_filt))./std(sig_filt);
     
     if generalParameters.mostra_grafici_segnali
-    
         figure
         plot(envelope_std)
         title('Segnale finale senza rumore')
@@ -483,11 +475,11 @@ end
 %% Rete neurale - addestramento
 
 if generalParameters.allena_rete_neurale
-    % Definizione architettura - sistema completo ma non testato
-    % Definizione dei layer della rete neurale
-    fprintf('\n Inizio allenamento NN \n')
-    tic;
-    if rete_custom
+    [nn_models, best_nn_index,metrics_nn] = trainClassifier('patternNet',trainParametersNN,sig_train,label_train,sig_val,label_val, generalParameters,filterParameters);
+end
+    
+    
+    % if rete_custom
 
         % Al momento qui sotto non funziona ancora
         % % Parametri dei dati
@@ -522,81 +514,81 @@ if generalParameters.allena_rete_neurale
         % % Addestramento del modello
         % net = trainNetwork(sig_train', label_train', layers, options_custom);
 
-    else
+    % else
 
         % Versione 1 layer
-        if num_layer == 1
-            net = patternnet(layer1, train_function, 'crossentropy');  % Rete con un solo hidden layer
-            net.layers{1}.transferFcn = neuron_function;   % Funzione di trasferimento del layer nascosto
-            net.layers{2}.transferFcn = 'softmax';  % Funzione di trasferimento del layer di output
-            
-            net.trainFcn = train_function;  
-            net.trainParam.epochs = max_epoche;
-            net.trainParam.goal = val_metrica_obiettivo;
-            net.trainParam.max_fail = validation_check;
-            if strcmp(train_function, 'traingdx')  
-                net.trainParam.lr = lr;
-                net.trainParam.mc = momentum;
-            end
-        end
-    
-        % Versione 2 layer
-        if num_layer == 2
-            net = patternnet([layer1 layer2], train_function, 'crossentropy');  
-            net.layers{1}.transferFcn = neuron_function;
-            net.layers{2}.transferFcn = neuron_function;
-            net.layers{3}.transferFcn = 'softmax';
-        
-            net.trainFcn = train_function;  
-            net.trainParam.epochs = max_epoche;
-            net.trainParam.goal = val_metrica_obiettivo;
-            net.trainParam.max_fail = validation_check;
-            if strcmp(train_function, 'traingdx')
-                net.trainParam.lr = lr;
-                net.trainParam.mc = momentum;
-            end
-        end
-    
-        % Versione 3 layer
-        if num_layer == 3
-            net = patternnet([layer1 layer2 layer3], train_function, 'crossentropy');  
-            net.layers{1}.transferFcn = neuron_function;
-            net.layers{2}.transferFcn = neuron_function;
-            net.layers{3}.transferFcn = neuron_function;   
-            net.layers{4}.transferFcn = 'softmax';  
-            
-            net.trainFcn = train_function;  
-            net.trainParam.epochs = max_epoche;
-            net.trainParam.goal = val_metrica_obiettivo;
-            net.trainParam.max_fail = validation_check;
-            if strcmp(train_function, 'traingdx') 
-                net.trainParam.lr = lr;
-                net.trainParam.mc = momentum;
-            end
-        end
-    
-        % Comandi per gestire automaticamente la gestione dell'intero dataset
-        % net.divideParam.trainRatio = 70/100;
-        % net.divideParam.valRatio = 15/100;
-        % net.divideParam.testRatio = 15/100;
-        
-        % Adattamento segnali e label a formato rete
-        sig_train = sig_train'; % Trasposizione per adattare a necessità rete
-        label_train = label_train+1;
-        label_train = full(ind2vec(label_train'));  % Converti in formato one-hot e trasponi
-    
-        % Allena
-        [net, tr] = train(net, sig_train, label_train);
-    
-    end
-    elapsed_time = toc;
-    fprintf('   Termine allenamento NN. Tempo necessario: %.2f secondi\n', elapsed_time);
-
-    if generalParameters.salva_modelli
-            mkdir(generalParameters.percorso_salvataggio_modelli); 
-            save(fullfile(generalParameters.percorso_salvataggio_modelli, 'nn_model.mat'), 'net');
-    end
-end
+%         if num_layer == 1
+%             net = patternnet(layer1, train_function, 'crossentropy');  % Rete con un solo hidden layer
+%             net.layers{1}.transferFcn = neuron_function;   % Funzione di trasferimento del layer nascosto
+%             net.layers{2}.transferFcn = 'softmax';  % Funzione di trasferimento del layer di output
+% 
+%             net.trainFcn = train_function;  
+%             net.trainParam.epochs = max_epoche;
+%             net.trainParam.goal = val_metrica_obiettivo;
+%             net.trainParam.max_fail = validation_check;
+%             if strcmp(train_function, 'traingdx')  
+%                 net.trainParam.lr = lr;
+%                 net.trainParam.mc = momentum;
+%             end
+%         end
+% 
+%         % Versione 2 layer
+%         if num_layer == 2
+%             net = patternnet([layer1 layer2], train_function, 'crossentropy');  
+%             net.layers{1}.transferFcn = neuron_function;
+%             net.layers{2}.transferFcn = neuron_function;
+%             net.layers{3}.transferFcn = 'softmax';
+% 
+%             net.trainFcn = train_function;  
+%             net.trainParam.epochs = max_epoche;
+%             net.trainParam.goal = val_metrica_obiettivo;
+%             net.trainParam.max_fail = validation_check;
+%             if strcmp(train_function, 'traingdx')
+%                 net.trainParam.lr = lr;
+%                 net.trainParam.mc = momentum;
+%             end
+%         end
+% 
+%         % Versione 3 layer
+%         if num_layer == 3
+%             net = patternnet([layer1 layer2 layer3], train_function, 'crossentropy');  
+%             net.layers{1}.transferFcn = neuron_function;
+%             net.layers{2}.transferFcn = neuron_function;
+%             net.layers{3}.transferFcn = neuron_function;   
+%             net.layers{4}.transferFcn = 'softmax';  
+% 
+%             net.trainFcn = train_function;  
+%             net.trainParam.epochs = max_epoche;
+%             net.trainParam.goal = val_metrica_obiettivo;
+%             net.trainParam.max_fail = validation_check;
+%             if strcmp(train_function, 'traingdx') 
+%                 net.trainParam.lr = lr;
+%                 net.trainParam.mc = momentum;
+%             end
+%         end
+% 
+%         % Comandi per gestire automaticamente la gestione dell'intero dataset
+%         % net.divideParam.trainRatio = 70/100;
+%         % net.divideParam.valRatio = 15/100;
+%         % net.divideParam.testRatio = 15/100;
+% 
+%         % Adattamento segnali e label a formato rete
+%         sig_train = sig_train'; % Trasposizione per adattare a necessità rete
+%         label_train = label_train+1;
+%         label_train = full(ind2vec(label_train'));  % Converti in formato one-hot e trasponi
+% 
+%         % Allena
+%         [net, tr] = train(net, sig_train, label_train);
+% 
+%     end
+%     elapsed_time = toc;
+%     fprintf('   Termine allenamento NN. Tempo necessario: %.2f secondi\n', elapsed_time);
+% 
+%     if generalParameters.salva_modelli
+%             mkdir(generalParameters.percorso_salvataggio_modelli); 
+%             save(fullfile(generalParameters.percorso_salvataggio_modelli, 'nn_model.mat'), 'net');
+%     end
+% end
 
 
 % Funzione per aggiungere rumore gaussiano

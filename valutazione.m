@@ -1,7 +1,7 @@
 %% Inizializzazione
-%clear 
-%close all
-%clc
+clear 
+close all
+clc
 
 
 %% N.B.
@@ -42,9 +42,9 @@ valuta_svm = true;
 valuta_lda = true;
 valuta_nn = true;
 
-percorso_salvataggio_svm = "Modelli_allenati_addestramento_dataAug\0.1\svm_model.mat";
-percorso_salvataggio_lda = "Modelli_allenati_addestramento_dataAug\0.1\lda_model.mat";
-percorso_salvataggio_nn = "Modelli_allenati_addestramento_dataAug\0.1\nn_model.mat";
+percorso_salvataggio_svm = "Modelli_allenati\svm\5\best_svm_model.mat";
+percorso_salvataggio_lda = "Modelli_allenati\lda\5\best_lda_model.mat";
+percorso_salvataggio_nn = "Modelli_allenati\patternNet\5\best_patternNet_model.mat";
 
 % percorso_salvataggio_svm = "Modelli_allenati_addestramento_nodataAug_noSMOTE\0.7\svm_model.mat";
 % percorso_salvataggio_lda = "Modelli_allenati_addestramento_nodataAug_noSMOTE\0.7\lda_model.mat";
@@ -189,8 +189,9 @@ if preprocessa_segnale
     % Standardizza i valori
     fprintf('\n      Inizio standardizzazione segnale \n')
     tic;
-    %envelope_std = (envelope-mean(envelope))./std(envelope);
-    envelope_std = (envelope-mu_train)./sigma_train;
+    envelope_std = (envelope-mean(envelope))./std(envelope);
+
+    %envelope_std = (envelope-mu_train)./sigma_train;
     elapsed_time = toc;
     fprintf('         Termine standardizzazione segnale. Tempo necessario: %.2f secondi\n', elapsed_time);
     
@@ -273,7 +274,7 @@ if valuta_svm
     metodo = "SVM";
     set = nome_grafici;
     
-    prediction_svm_test = predict(svm_model, test_signal);
+    prediction_svm_test = predict(best_svm_model, test_signal);
     
     elapsed_time = toc;
     fprintf('   Termine valutazione SVM. Tempo necessario: %.2f secondi\n', elapsed_time);
@@ -314,7 +315,7 @@ if valuta_lda
     metodo = "LDA";
     set = nome_grafici;
 
-    prediction_lda_test = predict(lda_model, test_signal);
+    prediction_lda_test = predict(best_lda_model, test_signal);
 
     elapsed_time = toc;
     fprintf('   Termine valutazione LDA. Tempo necessario: %.2f secondi\n', elapsed_time);
@@ -356,7 +357,7 @@ if valuta_nn
     label_test = full(ind2vec(label_test'));
 
     % Calcola predizioni
-    prediction_nn_test = net(test_signal);
+    prediction_nn_test = best_patternNet_model(test_signal);
     prediction_nn_test = vec2ind(prediction_nn_test);  % Converti le probabilità in indici di classe
     
     % Riporta i valori adattati al formato originale
@@ -568,27 +569,27 @@ if applica_postprocess_singolo
 end
 
 %% Plot temporanei
-figure
-hold on
-grid on
-title('Sensibilità media predittori')
-plot(sens_media_lda, 'o');
-plot(sens_media_svm, 'x');
-plot(sens_media_nn, '*');
-plot(sens_media_processate, '*')
-legend('LDA', 'SVM', 'NN', 'NN processata')
-ylabel('Sensibilità')
-
-figure
-hold on
-grid on
-title('Specificità media predittori')
-plot(spec_media_lda, 'o');
-plot(spec_media_svm, 'x');
-plot(spec_media_nn, '*');
-plot(spec_media_processate, '*')
-legend('LDA', 'SVM', 'NN', 'NN processata')
-ylabel('Specificità')
+% figure
+% hold on
+% grid on
+% title('Sensibilità media predittori')
+% plot(sens_media_lda, 'o');
+% plot(sens_media_svm, 'x');
+% plot(sens_media_nn, '*');
+% plot(sens_media_processate, '*')
+% legend('LDA', 'SVM', 'NN', 'NN processata')
+% ylabel('Sensibilità')
+% 
+% figure
+% hold on
+% grid on
+% title('Specificità media predittori')
+% plot(spec_media_lda, 'o');
+% plot(spec_media_svm, 'x');
+% plot(spec_media_nn, '*');
+% plot(spec_media_processate, '*')
+% legend('LDA', 'SVM', 'NN', 'NN processata')
+% ylabel('Specificità')
 
 %% Creazione vettori per test consecutivi
 % spec_lda_media = [];

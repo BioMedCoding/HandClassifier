@@ -11,7 +11,7 @@ f_sample = 2000;                                    % Frequenza campionamento
 f_taglio_basso = 20;                                % Frequenza minima del passabanda
 f_taglio_alta = 400;                                % Frequenza massima del passabanda
 f_notch = 50;                                       % Frequenza del notch
-f_envelope = 4;
+f_envelope = 10;
 percH = 1.3;                                        % Percentuale frequenza alta
 visualisation = "no";                               % Mostra grafici filtraggio
 
