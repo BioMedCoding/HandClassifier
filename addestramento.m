@@ -1,53 +1,53 @@
 %% Inizializzazione
 clc
-%clear 
+clear 
 close all
 
 
 %% ======================== Parametri generali script ======================
-mostra_grafici_segnali = true;                      % Mostra grafici relativi ai segnali pre-classificazione
-mostra_segnale_per_canale = false;
+generalParameters.mostra_grafici_segnali = false;                      % Mostra grafici relativi ai segnali pre-classificazione
+generalParameters.mostra_segnale_per_canale = false;
 
-percorso_dati_aperture = "Original_data/aperture.txt";
-percorso_dati_chiusure = "Original_data/chiusure.txt";
-percorso_label_training = "Prepared_data/label_dataset_completo";
+generalParameters.percorso_dati_aperture = "Original_data/aperture.txt";
+generalParameters.percorso_dati_chiusure = "Original_data/chiusure.txt";
+generalParameters.percorso_label_training = "Prepared_data/label_dataset_completo";
 
-valore_apertura = 1;                                % Valore label apertura
-valore_chiusura = 2;                                % Valore label chiusura
-classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
+generalParameters.valore_apertura = 1;                                % Valore label apertura
+generalParameters.valore_chiusura = 2;                                % Valore label chiusura
+generalParameters.classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
 
-dati_da_processare = true;                          % Se true carica dati grezzi e preprocessa, altrimenti carica direttamente dati e label già pronti
-percorso_dati_preprocessati = "External_data/dataset_completo_preprocessato";
-percorso_label_preprocessati = "External_data/label_dataset_completo_preprocessato";
+generalParameters.dati_da_processare = true;                          % Se true carica dati grezzi e preprocessa, altrimenti carica direttamente dati e label già pronti
+generalParameters.percorso_dati_preprocessati = "External_data/dataset_completo_preprocessato";
+generalParameters.percorso_label_preprocessati = "External_data/label_dataset_completo_preprocessato";
 
-applica_data_augmentation = true;
-applica_data_augmentation_rumore_gaussiano = false;
-livello_rumore_gaussiano = 0.01; 
-applica_data_augmentation_ampiezza_dinamica = true;
-amp_range = [0.7, 1.3];                             % Range di variazione da applicare
-change_rate = 5;                                    % Velocità di cambiamento dell'ampiezza
+generalParameters.applica_data_augmentation = true;
+generalParameters.applica_data_augmentation_rumore_gaussiano = false;
+generalParameters.livello_rumore_gaussiano = 0.01; 
+generalParameters.applica_data_augmentation_ampiezza_dinamica = true;
+generalParameters.amp_range = [0.7, 1.3];                             % Range di variazione da applicare
+generalParameters.change_rate = 5;                                    % Velocità di cambiamento dell'ampiezza
 % Finora meglio  amp_range = [0.7, 1.3]; | change_rate = 5;  
 
-bilancia_classi = true;
-metodo_bilanciamento_classi = 'smote';
+generalParameters.bilancia_classi = true;
+generalParameters.metodo_bilanciamento_classi = 'smote';
 
-allena_svm = true;                                  % Esegui la sezione di addestramento e testing SVM
-allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
-allena_rete_neurale = true; 
+generalParameters.allena_svm = true;                                  % Esegui la sezione di addestramento e testing SVM
+generalParameters.allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
+generalParameters.allena_rete_neurale = true; 
 
-rapporto_training_validation = 0.7;
+generalParameters.rapporto_training_validation = 0.0001;
 % Con rapporto_training_validation = 0.00005 si usano 61 campioni di
 % segnale, ovvero 30 ms di tempo di acquisizione
 
-numero_worker = 14; 
+generalParameters.numero_worker = 14; 
 
-salva_modelli = true;                               % Salva i modelli allenati      
-salvataggio_train_val = false;                       % Salva matrici contenenti training e validation set
-salvataggio_dataset_completo = false;               % Salva matrice contenente il dataset completo (già effettuato, pertanto disattivato)
+generalParameters.salva_modelli = true;                               % Salva i modelli allenati      
+generalParameters.salvataggio_train_val = false;                       % Salva matrici contenenti training e validation set
+generalParameters.generalParameters.salvataggio_dataset_completo = false;               % Salva matrice contenente il dataset completo (già effettuato, pertanto disattivato)
 
-percorso_salvataggio_modelli = strcat("C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento_dataAug","\",num2str(rapporto_training_validation)); % Percorso dove salvare i modelli
-percorso_salvataggio_train_val = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
-percorso_salvataggio_dataset_completo = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
+generalParameters.percorso_salvataggio_modelli = strcat("C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento_dataAug","\",num2str(generalParameters.rapporto_training_validation)); % Percorso dove salvare i modelli
+generalParameters.percorso_salvataggio_train_val = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
+generalParameters.percorso_salvataggio_dataset_completo = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 
@@ -57,41 +57,43 @@ warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning
 
 
 %% ======================== Parametri filtraggio ===========================
-tipo_filtro = "cheby2";
-f_sample = 2000;                                    % Frequenza campionamento
-f_taglio_basso = 20;                                % Frequenza minima del passabanda
-f_taglio_alta = 400;                                % Frequenza massima del passabanda
-f_notch = 50;                                       % Frequenza del notch
-f_envelope = 4;                                     % Frequenza inviluppo
-percH = 1.3;                                        % Percentuale frequenza alta
-visualisation = "no";                               % Mostra grafici filtraggio
+filterParameters.tipo_filtro = "cheby2";
+filterParameters.f_sample = 2000;                                    % Frequenza campionamento
+filterParameters.f_taglio_basso = 20;                                % Frequenza minima del passabanda
+filterParameters.f_taglio_alta = 400;                                % Frequenza massima del passabanda
+filterParameters.f_notch = 50;                                       % Frequenza del notch
+filterParameters.f_envelope = 4;                                     % Frequenza inviluppo
+filterParameters.percH = 1.3;                                        % Percentuale frequenza alta
+filterParameters.visualisation = "no";                               % Mostra grafici filtraggio
 %% =========================================================================
 
 
 
 
 %%  ========================Parametri addestramento SVM ====================
-svm_parameter_hypertuning = false;                  % Abilita hypertuning automatico dei parametri, sfruttando anche parallel pool
-svm_calcolo_GPU = false;                           % Abilita l'addestramento dell'SVM tramite l'uso della GPU
-ore_esecuzione_massime = 0.25;                     % Numero massimo di ora per cui continuare l'hypertuning automatico dei parametri
 
-%t_hyper = templateSVM('KernelFunction', 'rbf', 'KernelScale', 'auto');
-t_hyper = templateSVM('KernelFunction', 'polynomial','PolynomialOrder', 3, 'KernelScale', 'auto');
-
-opts_hyp = struct('AcquisitionFunctionName', 'expected-improvement-plus', ...
+trainParametersSVM.hypertuning = false;
+trainParametersSVM.useGPU = false;
+trainParametersSVM.maxTrainHours = 0.25;
+trainParametersSVM.t_hyper = templateSVM('KernelFunction', 'polynomial','PolynomialOrder', 3, 'KernelScale', 'auto');
+trainParametersSVM.opts_hyp = struct('AcquisitionFunctionName', 'expected-improvement-plus', ...
     'UseParallel', true, ...
     'MaxObjectiveEvaluations', 300, ... 
     'Verbose', 2, ...                                              
     'ShowPlots', true, ...                                         
     'SaveIntermediateResults', true, ...                           
-    'MaxTime', ore_esecuzione_massime*3600);                       
+    'MaxTime', trainParametersSVM.maxTrainHours*3600);  
+trainParametersSVM.t_single = templateSVM('KernelFunction', 'rbf', 'KernelScale', 10, 'Solver', 'ISDA');
+trainParametersSVM.coding_single = 'onevsone';
 
-%t_single = templateSVM('KernelFunction', 'polynomial', 'PolynomialOrder', 2, 'KernelScale', 10, 'Solver', 'ISDA');
-t_single = templateSVM('KernelFunction', 'rbf', 'KernelScale', 10, 'Solver', 'ISDA');
-%t_single = templateSVM('KernelFunction', 'rbf', 'BoxConstraint', 21.344, 'KernelScale', 0.55962); % Valore migliore trovato durante hypertuning automatico, con onevsone
-%t_single = templateSVM('KernelFunction', 'rbf', 'BoxConstraint', 48.242,
-%'KernelScale', 0.35358); % Hyper 2
-coding_single = 'onevsone'; % 'onevsone', 'onevsall'
+trainParametersSVM.saveAllModel = false;
+trainParametersSVM.savePath = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati\SVM";
+trainParametersSVM.trainingRepetitions = 2;
+
+trainParametersSVM.showCM = false;
+trainParametersSVM.showText = false;
+trainParametersSVM.classes = {'Rilassata', 'Apertura','Chiusura'};
+
 %% =========================================================================
 
 
@@ -152,7 +154,8 @@ end
 
 
 %% ======================== Parametri addestramento LDA ====================
-discrimType = 'quadratic'; % 'linear', 'quadratic', 'diaglinear', 'diagquadratic', 'pseudolinear','pseudoquadratic'
+trainParametersLDA.discriminant = 'quadratic';
+%discrimType = 'quadratic'; % 'linear', 'quadratic', 'diaglinear', 'diagquadratic', 'pseudolinear','pseudoquadratic'
         % Le metriche qui sotto sono riferite al test set, senza postprocess. Accuratezza complessiva e poi metrica peggiore
         % 'linear': 75.22%, 48.64 sensibilità 3
         % 'quadratic': 87.81%, 72.65% sensibilità 2
@@ -167,9 +170,9 @@ discrimType = 'quadratic'; % 'linear', 'quadratic', 'diaglinear', 'diagquadratic
 
 
 %% ================= Avvio pool se necessario e non attivo =================
-if svm_parameter_hypertuning
+if trainParametersSVM.hypertuning
     if isempty(gcp('nocreate'))
-            parpool('local', numero_worker); % Avvia in modalità processes
+            parpool('local', generalParameters.numero_worker); % Avvia in modalità processes
             %parpool('Threads')              % Avvia in modalità thread
     end
 end
@@ -181,18 +184,18 @@ end
 %% Import segnali 
 
 
-if dati_da_processare
+if generalParameters.dati_da_processare
     fprintf('\nInizio import e process dati \n')
     tic;
     % Import segnali aperture
-    sig = readtable(percorso_dati_aperture,"Delimiter", '\t');
+    sig = readtable(generalParameters.percorso_dati_aperture,"Delimiter", '\t');
     %t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
     sig(:,1) = [];
     sig_aperture = table2array(sig);
     
     
     % Import segnali chiusure
-    sig = readtable(percorso_dati_chiusure,"Delimiter", '\t');
+    sig = readtable(generalParameters.percorso_dati_aperture,"Delimiter", '\t');
     %t_hyp = sig(:,1); % salva colonna dei tempi prima di cancellarla
     sig(:,1) = [];
     sig_chiusura = table2array(sig);
@@ -210,10 +213,10 @@ if dati_da_processare
     
     % Filtraggio segnale
     for i=1:n_channel
-        sig_filt(:,i) = filter_general(sig(:,i),tipo_filtro,f_sample,"fL",f_taglio_basso,"fH",f_taglio_alta,"fN",f_notch,"visualisation",visualisation);
+        sig_filt(:,i) = filter_general(sig(:,i),filterParameters.tipo_filtro,filterParameters.f_sample,"fL",filterParameters.f_taglio_basso,"fH",filterParameters.f_taglio_alta,"fN",filterParameters.f_notch,"visualisation",filterParameters.visualisation);
     end
     
-    if mostra_segnale_per_canale
+    if generalParameters.mostra_segnale_per_canale
         figure;
     
         subplot(5,1,1);
@@ -255,10 +258,10 @@ if dati_da_processare
     envelope = zeros(length(sig_filt),n_channel);
     
     for i=1:n_channel
-        envelope(:,i) = filter_general(abs(sig_filt(:,i)),tipo_filtro,f_sample,"fH",f_envelope,"percH",percH);   
+        envelope(:,i) = filter_general(abs(sig_filt(:,i)),filterParameters.tipo_filtro,filterParameters.f_sample,"fH",filterParameters.f_envelope,"percH",filterParameters.percH);   
     end
     
-    if mostra_grafici_segnali
+    if generalParameters.mostra_grafici_segnali
         figure
         plot(envelope)
         title('Inviluppo segnale grezzo');
@@ -270,7 +273,7 @@ if dati_da_processare
     
     envelope_std = (envelope-mean(envelope))./std(envelope);
     
-    if mostra_segnale_per_canale
+    if generalParameters.mostra_segnale_per_canale
         figure;
     
         subplot(5,1,1);
@@ -310,7 +313,7 @@ if dati_da_processare
     % Riga per usare il segnale senza inviluppo
     %envelope_std = (sig_filt-mean(sig_filt))./std(sig_filt);
     
-    if mostra_grafici_segnali
+    if generalParameters.mostra_grafici_segnali
     
         figure
         plot(envelope_std)
@@ -320,12 +323,12 @@ if dati_da_processare
     
     % Salvataggio dataset completo
     % if salvataggio_dataset_completo
-    %     save(strcat(percorso_salvataggio_dataset_completo,"/dataset_completo"), "envelope_std")
+    %     save(strcat(generalParameters.percorso_salvataggio_dataset_completo,"/dataset_completo"), "envelope_std")
     % end
     
     %% Caricamento label segnale di training
     
-    data = load(percorso_label_training);
+    data = load(generalParameters.percorso_label_training);
     varNames = fieldnames(data);
     
     % Verifica che ci sia almeno una variabile nel file
@@ -339,7 +342,7 @@ if dati_da_processare
     % Taglio del segnale perché abbia la stessa lunghezza del label
     envelope_std = envelope_std(1:length(label_dataset_completo), :);
     
-    if mostra_grafici_segnali
+    if generalParameters.mostra_grafici_segnali
         figure
         plot(label_dataset_completo)
         hold on
@@ -354,14 +357,14 @@ if dati_da_processare
 else  % Caso di import diretto di dati e label già processati
     fprintf('\nInizio import dati \n')
     tic;
-    envelope_std = load(percorso_dati_preprocessati);
-    label_dataset_completo = load(percorso_label_preprocessati);
+    envelope_std = load(generalParameters.percorso_dati_preprocessati);
+    label_dataset_completo = load(generalParameters.percorso_label_preprocessati);
     elapsed_time = toc;
     fprintf('   Termine import dati. Tempo necessario: %.2f secondi\n', elapsed_time);
 end
 %% Applicazione data augmentation
 
-if applica_data_augmentation
+if generalParameters.applica_data_augmentation
     fprintf('\nInizio Data augmentation \n')
     tic;
     % Salvataggio del segnale originale, per eventuali usi futuri
@@ -374,13 +377,13 @@ if applica_data_augmentation
     augmentedData = envelope_std;
     augmentedLabels = label_dataset_completo;
 
-    if applica_data_augmentation_rumore_gaussiano
+    if generalParameters.applica_data_augmentation_rumore_gaussiano
     
         envelope_std_gauss = zeros(size(envelope_std));
     
         for i = 1:size(envelope_std_gauss,1)
     
-            envelope_std_gauss(i, :) = add_gaussian_noise(envelope_std(i, :), livello_rumore_gaussiano);
+            envelope_std_gauss(i, :) = add_gaussian_noise(envelope_std(i, :), generalParameters.livello_rumore_gaussiano);
 
         end
 
@@ -389,13 +392,13 @@ if applica_data_augmentation
     
     end
 
-    if applica_data_augmentation_ampiezza_dinamica
+    if generalParameters.applica_data_augmentation_ampiezza_dinamica
     
         varied_amplitude_signal = zeros(size(envelope_std));
     
         for i = 1:size(envelope_std,1)
         
-            varied_amplitude_signal(i, :) = vary_amplitude(envelope_std(i, :), amp_range, change_rate);
+            varied_amplitude_signal(i, :) = vary_amplitude(envelope_std(i, :), generalParameters.amp_range, generalParameters.change_rate);
     
         end
     
@@ -404,7 +407,7 @@ if applica_data_augmentation
         
     end
     
-    if mostra_grafici_segnali
+    if generalParameters.mostra_grafici_segnali
         figure
         plot(augmentedData)
         title('Segnale finale senza rumore')
@@ -422,10 +425,10 @@ end
 
 %% Bilanciamento classi
 
-if bilancia_classi
+if generalParameters.bilancia_classi
     fprintf('\nInizio Bilanciamento classi \n')
     tic;
-    [envelope_std, label_dataset_completo] = balance_dataset(envelope_std, label_dataset_completo, metodo_bilanciamento_classi);
+    [envelope_std, label_dataset_completo] = balance_dataset(envelope_std, label_dataset_completo, generalParameters.metodo_bilanciamento_classi);
     elapsed_time = toc;
     fprintf('   Termine Bilanciamento classi. Tempo necessario: %.2f secondi\n', elapsed_time);
 end
@@ -438,8 +441,8 @@ tic;
 % Creazione indici per training e test
 num_samp = length(envelope_std(:,1));
 index_random = randperm(num_samp);
-training_idx = index_random(1:round(rapporto_training_validation*num_samp));
-validation_idx = index_random(round(rapporto_training_validation*num_samp):end);
+training_idx = index_random(1:round(generalParameters.rapporto_training_validation*num_samp));
+validation_idx = index_random(round(generalParameters.rapporto_training_validation*num_samp):end);
 
 sig_train = envelope_std(training_idx,:);
 sig_val = envelope_std(validation_idx,:);
@@ -447,55 +450,25 @@ label_train = label_dataset_completo(training_idx,:);
 label_val = label_dataset_completo(validation_idx,:);
 
 % Salvataggio training e validation set
-if salvataggio_train_val
-    mkdir(percorso_salvataggio_train_val); 
-    save(strcat(percorso_salvataggio_train_val,"/training_set"), "sig_train")
-    save(strcat(percorso_salvataggio_train_val,"/validation_set"), "sig_val")
-    save(strcat(percorso_salvataggio_train_val,"/label_train"), "label_train")
-    save(strcat(percorso_salvataggio_train_val,"/label_val"), "label_val")
+if generalParameters.salvataggio_train_val
+    mkdir(generalParameters.percorso_salvataggio_train_val); 
+    save(strcat(generalParameters.percorso_salvataggio_train_val,"/training_set"), "sig_train")
+    save(strcat(generalParameters.percorso_salvataggio_train_val,"/validation_set"), "sig_val")
+    save(strcat(generalParameters.percorso_salvataggio_train_val,"/label_train"), "label_train")
+    save(strcat(generalParameters.percorso_salvataggio_train_val,"/label_val"), "label_val")
 end
 elapsed_time = toc;
 fprintf('   Termine Divisione training e validation set. Tempo necessario: %.2f secondi\n', elapsed_time);
 %% SVM - addestramento
 
-if allena_svm
-    fprintf('\nInizio allenamento SVM \n')
-    tic;
-    if svm_parameter_hypertuning
-        % Selezione se GPU o CPU
-        if svm_calcolo_GPU
-            % Trasferimento dei dati sulla GPU
-            gpu_sig_train = gpuArray(sig_train);
-            gpu_label_train = gpuArray(label_train);
-            %svm_model = fitcecoc(gpu_sig_train,gpu_label_train, 'Learners', t_hyper, 'OptimizeHyperparameters', 'auto', 'HyperparameterOptimizationOptions', opts_hyp, 'ClassNames', classi); 
-            svm_model = fitcecoc(gpu_sig_train,gpu_label_train, 'Learners', t_hyper, 'OptimizeHyperparameters', 'auto', 'HyperparameterOptimizationOptions', opts_hyp); 
-            svm_model = gather(svm_model);
-        else
-            svm_model = fitcecoc(sig_train,label_train, 'Learners', t_hyper, 'OptimizeHyperparameters', 'auto', 'HyperparameterOptimizationOptions', opts_hyp);
-        end
-    else    % Addestramento singolo
-        if svm_calcolo_GPU
-            % Trasferimento dei dati sulla GPU
-            gpu_sig_train = gpuArray(sig_train);
-            gpu_label_train = gpuArray(label_train); 
-            svm_model = fitcecoc(gpu_sig_train,gpu_label_train, 'Learners', t_single, 'Coding', coding_single); 
-            svm_model = gather(svm_model);
-        else
-            svm_model = fitcecoc(sig_train,label_train, 'Learners', t_single, 'Coding', coding_single);
-        end
-    end
-    elapsed_time = toc;
-    fprintf('   Termine allenamento SVM. Tempo necessario: %.2f secondi\n', elapsed_time);
-    if salva_modelli
-        % Salva il modello allenato in un file .mat
-        mkdir(percorso_salvataggio_modelli); 
-        save(fullfile(percorso_salvataggio_modelli, 'svm_model.mat'), 'svm_model');
-    end  
-end  
+if generalParameters.allena_svm
+    [svm_models, best_svm_index,metrics_svm] = trainClassifier('SVM',trainParametersSVM,sig_train,label_train,sig_val,label_val, generalParameters,filterParameters);
+end
+
 
 %% LDA - addestramento
 
-if allena_lda
+if generalParameters.allena_lda
 
     fprintf('\nInizio allenamento LDA \n')
     tic;
@@ -507,15 +480,15 @@ if allena_lda
     elapsed_time = toc;
     fprintf('   Termine allenamento LDA. Tempo necessario: %.2f secondi\n', elapsed_time);
 
-    if salva_modelli
-        mkdir(percorso_salvataggio_modelli); 
-        save(fullfile(percorso_salvataggio_modelli, 'lda_model.mat'), 'lda_model');
+    if generalParameters.salva_modelli
+        mkdir(generalParameters.percorso_salvataggio_modelli); 
+        save(fullfile(generalParameters.percorso_salvataggio_modelli, 'lda_model.mat'), 'lda_model');
     end
 end  
 
 %% Rete neurale - addestramento
 
-if allena_rete_neurale
+if generalParameters.allena_rete_neurale
     % Definizione architettura - sistema completo ma non testato
     % Definizione dei layer della rete neurale
     fprintf('\n Inizio allenamento NN \n')
@@ -625,9 +598,9 @@ if allena_rete_neurale
     elapsed_time = toc;
     fprintf('   Termine allenamento NN. Tempo necessario: %.2f secondi\n', elapsed_time);
 
-    if salva_modelli
-            mkdir(percorso_salvataggio_modelli); 
-            save(fullfile(percorso_salvataggio_modelli, 'nn_model.mat'), 'net');
+    if generalParameters.salva_modelli
+            mkdir(generalParameters.percorso_salvataggio_modelli); 
+            save(fullfile(generalParameters.percorso_salvataggio_modelli, 'nn_model.mat'), 'net');
     end
 end
 

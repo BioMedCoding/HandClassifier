@@ -16,7 +16,7 @@ percH = 1.3;                                        % Percentuale frequenza alta
 visualisation = "no";                               % Mostra grafici filtraggio
 
 % Parametri postprocess
-lunghezza_buffer_precedenti = 2;  % 400 ha dato valori migliori
+lunghezza_buffer_precedenti = 2;                    % 400 ha dato valori migliori
 lunghezza_buffer_successivi = 2;
 
 
