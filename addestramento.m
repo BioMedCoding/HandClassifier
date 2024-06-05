@@ -87,7 +87,7 @@ trainParametersSVM.t_single = templateSVM('KernelFunction', 'rbf', 'KernelScale'
 trainParametersSVM.coding_single = 'onevsone';
 
 trainParametersSVM.saveAllModel = false;
-trainParametersSVM.savePath = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati\SVM";
+trainParametersSVM.savePath = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati\";
 trainParametersSVM.trainingRepetitions = 2;
 
 trainParametersSVM.showCM = false;
@@ -163,6 +163,14 @@ trainParametersLDA.discriminant = 'quadratic';
         % 'diagquadratic': 75.89%, 47.18 sensibilità 3
         % 'pseudolinear': 75.25%, 48.66 sensibilità 3
         % 'pseudoquadratic': 75.25%, 48.62 sensibilità 3
+
+trainParametersLDA.saveAllModel = false;
+trainParametersLDA.savePath = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati\SVM";
+trainParametersLDA.trainingRepetitions = 2;
+
+trainParametersLDA.showCM = false;
+trainParametersLDA.showText = false;
+trainParametersLDA.classes = {'Rilassata', 'Apertura','Chiusura'};
 
 %% =========================================================================
 
@@ -462,28 +470,14 @@ fprintf('   Termine Divisione training e validation set. Tempo necessario: %.2f 
 %% SVM - addestramento
 
 if generalParameters.allena_svm
-    [svm_models, best_svm_index,metrics_svm] = trainClassifier('SVM',trainParametersSVM,sig_train,label_train,sig_val,label_val, generalParameters,filterParameters);
+    [svm_models, best_svm_index,metrics_svm] = trainClassifier('svm',trainParametersSVM,sig_train,label_train,sig_val,label_val, generalParameters,filterParameters);
 end
 
 
 %% LDA - addestramento
 
 if generalParameters.allena_lda
-
-    fprintf('\nInizio allenamento LDA \n')
-    tic;
-    lda_model = fitcdiscr(sig_train,label_train,  'DiscrimType', discrimType);
-    
-    % Visualizza i coefficienti del modello
-    %Mdl.Coeffs(1,2).Const    % Costante del decision boundary
-    %Mdl.Coeffs(1,2).Linear   % Coefficienti lineari per il decision boundary
-    elapsed_time = toc;
-    fprintf('   Termine allenamento LDA. Tempo necessario: %.2f secondi\n', elapsed_time);
-
-    if generalParameters.salva_modelli
-        mkdir(generalParameters.percorso_salvataggio_modelli); 
-        save(fullfile(generalParameters.percorso_salvataggio_modelli, 'lda_model.mat'), 'lda_model');
-    end
+    [lda_models, best_lda_index,metrics_lda] = trainClassifier('lda',trainParametersLDA,sig_train,label_train,sig_val,label_val, generalParameters,filterParameters);
 end  
 
 %% Rete neurale - addestramento
