@@ -18,19 +18,20 @@ mostra_segnale_per_canale = false;
 mostra_cm = false;                                    % Mostra le CM dei vari classificatori
 mostra_risultati_singoli = false;                     % Mostra confronto singolo classificatore - Ground Truth
 mostra_risultati_complessivi = true;                 % Mostra confronto tutti i classificatori - Ground Truth
+salva_predizioni = true; 
 
 classi = {'Rilassata', 'Apertura','Chiusura'};       % Nomi assegnati alle classi
 
-percorso_segnale = "Prepared_data/test_set.mat";
+percorso_segnale = "Prepared_data/test_set_processato.mat";
 percorso_label = "Prepared_data/label_test.mat";
 nome_grafici = "Test set";                           % Nome che viene mostrato nei grafici relativi ai risultati
 
-preprocessa_segnale = true;
+preprocessa_segnale = false;
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 
-mu_train = [44.4870    9.8573    9.0265   16.4091   19.7749];
-sigma_train = [57.9282   11.2726   11.4219   21.4592   24.7809];
+mu_train = [40.1766159416275	8.53952227189099	6.59754548600884	17.0306346388909	25.8723314028749];
+sigma_train = [34.5835591614448	6.54092346536348	4.14584583861365	14.4216369671048	25.7048215429423];
 %% =========================================================================
 
 
@@ -42,9 +43,9 @@ valuta_svm = true;
 valuta_lda = true;
 valuta_nn = true;
 
-percorso_salvataggio_svm = "Modelli_allenati\svm\5\best_svm_model.mat";
-percorso_salvataggio_lda = "Modelli_allenati\lda\5\best_lda_model.mat";
-percorso_salvataggio_nn = "Modelli_allenati\patternNet\5\best_patternNet_model.mat";
+percorso_salvataggio_svm = "Modelli_allenati\svm_multiclass\2\best_svm_multiclass_model.mat";
+percorso_salvataggio_lda = "Modelli_allenati\lda\1\best_lda_model.mat";
+percorso_salvataggio_nn = "Modelli_allenati\patternNet\1\best_patternNet_model.mat";
 
 % percorso_salvataggio_svm = "Modelli_allenati_addestramento_nodataAug_noSMOTE\0.7\svm_model.mat";
 % percorso_salvataggio_lda = "Modelli_allenati_addestramento_nodataAug_noSMOTE\0.7\lda_model.mat";
@@ -189,9 +190,17 @@ if preprocessa_segnale
     % Standardizza i valori
     fprintf('\n      Inizio standardizzazione segnale \n')
     tic;
-    envelope_std = (envelope-mean(envelope))./std(envelope);
+    %envelope_std = (envelope-mean(envelope))./std(envelope);
+    envelope_std = (envelope-mu_train)./sigma_train;
 
-    %envelope_std = (envelope-mu_train)./sigma_train;
+    % Normalizza i valori
+    % Trova i valori minimi e massimi per ogni colonna (feature)
+    minVals = [-12.7205    0.1105   -0.5922   -3.6349   -5.0174];
+    maxVals = [208.7660   43.4513   28.5366   75.4635  131.5598];
+
+    % Esegui la normalizzazione min-max
+    envelope_std = (envelope - minVals) ./ (maxVals - minVals);
+
     elapsed_time = toc;
     fprintf('         Termine standardizzazione segnale. Tempo necessario: %.2f secondi\n', elapsed_time);
     
@@ -274,7 +283,8 @@ if valuta_svm
     metodo = "SVM";
     set = nome_grafici;
     
-    prediction_svm_test = predict(best_svm_model, test_signal);
+    %prediction_svm_test = predict(best_svm_model, test_signal);
+    prediction_svm_test = predict(best_svm_multiclass_model, test_signal);
     
     elapsed_time = toc;
     fprintf('   Termine valutazione SVM. Tempo necessario: %.2f secondi\n', elapsed_time);
@@ -299,6 +309,10 @@ if valuta_svm
         linkaxes([subplot(2,1,1), subplot(2,1,2)]);
     
     end
+
+    if salva_predizioni
+        save(sprintf('predizioni_%s_grezze',metodo),"prediction_svm_test");
+    end
 end
 
 
@@ -315,6 +329,7 @@ if valuta_lda
     metodo = "LDA";
     set = nome_grafici;
 
+    % prediction_lda_test = predict(best_lda_model, test_signal);
     prediction_lda_test = predict(best_lda_model, test_signal);
 
     elapsed_time = toc;
@@ -338,6 +353,10 @@ if valuta_lda
         
         % Collega gli assi verticali dei due subplot
         linkaxes([subplot(2,1,1), subplot(2,1,2)]);
+    end
+
+    if salva_predizioni
+        save(sprintf('predizioni_%s_grezze',metodo),"prediction_lda_test");
     end
 end
 %% Valutazione NN
@@ -390,6 +409,10 @@ if valuta_nn
         
         % Collega gli assi verticali dei due subplot
         linkaxes([subplot(2,1,1), subplot(2,1,2)]);
+    end
+
+    if salva_predizioni
+        save(sprintf('predizioni_%s_grezze',metodo),"prediction_nn_test");
     end
 end
 
@@ -566,6 +589,10 @@ if applica_postprocess_singolo
         % Collega gli assi verticali dei due subplot
         linkaxes([subplot(4,1,1), subplot(4,1,2), subplot(4,1,3), subplot(4,1,4)]);
     end
+
+    if salva_predizioni
+        save(strcat(segnale_da_elaborare,'_processato'),"prediction_nn_test");
+    end
 end
 
 %% Plot temporanei
@@ -604,7 +631,7 @@ end
 % sens_post_media = [];
 % sens_post2_media = [];
 
-clear set
+%clear set
 
 % spec_lda_media = horzcat(spec_lda_media, mean(spec_lda_test));
 % spec_svm_media = horzcat(spec_svm_media, mean(spec_svm_test));

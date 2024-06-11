@@ -5,7 +5,7 @@ close all
 
 
 %% ======================== Parametri generali script ======================
-generalParameters.mostra_grafici_segnali = false;                      % Mostra grafici relativi ai segnali pre-classificazione
+generalParameters.mostra_grafici_segnali = true;                      % Mostra grafici relativi ai segnali pre-classificazione
 generalParameters.mostra_segnale_per_canale = false;
 
 generalParameters.percorso_dati_aperture = "Original_data/aperture.txt";
@@ -16,26 +16,26 @@ generalParameters.valore_apertura = 1;                                % Valore l
 generalParameters.valore_chiusura = 2;                                % Valore label chiusura
 generalParameters.classi = {'Rilassata', 'Apertura','Chiusura'};      % Nomi assegnati alle classi
 
-generalParameters.dati_da_processare = true;                          % Se true carica dati grezzi e preprocessa, altrimenti carica direttamente dati e label già pronti
-generalParameters.percorso_dati_preprocessati = "External_data/dataset_completo_preprocessato";
-generalParameters.percorso_label_preprocessati = "External_data/label_dataset_completo_preprocessato";
+generalParameters.dati_da_processare = false;                          % Se true carica dati grezzi e preprocessa, altrimenti carica direttamente dati e label già pronti
+generalParameters.percorso_dati_preprocessati = "Prepared_data/dataset_completo_processato2.mat";
+generalParameters.percorso_label_preprocessati = "Prepared_data/label_dataset_completo.mat";
 
-generalParameters.applica_data_augmentation = false;
+generalParameters.applica_data_augmentation = true;
 generalParameters.applica_data_augmentation_rumore_gaussiano = false;
 generalParameters.livello_rumore_gaussiano = 0.01; 
-generalParameters.applica_data_augmentation_ampiezza_dinamica = false;
+generalParameters.applica_data_augmentation_ampiezza_dinamica = true;
 generalParameters.amp_range = [0.7, 1.3];                             % Range di variazione da applicare
 generalParameters.change_rate = 5;                                    % Velocità di cambiamento dell'ampiezza
 % Finora meglio  amp_range = [0.7, 1.3]; | change_rate = 5;  
 
-generalParameters.bilancia_classi = true;
+generalParameters.bilancia_classi = false;
 generalParameters.metodo_bilanciamento_classi = 'smote';
 
 generalParameters.allena_svm = true;                                  % Esegui la sezione di addestramento e testing SVM
 generalParameters.allena_lda = true;                                  % Esegui la sezione di addestramento e testing LDA
 generalParameters.allena_rete_neurale = true; 
 
-generalParameters.rapporto_training_validation = 0.001;
+generalParameters.rapporto_training_validation = 0.01;
 % Con rapporto_training_validation = 0.00005 si usano 61 campioni di
 % segnale, ovvero 30 ms di tempo di acquisizione
 
@@ -43,11 +43,13 @@ generalParameters.numero_worker = 14;
 
 generalParameters.salva_modelli = true;                               % Salva i modelli allenati      
 generalParameters.salvataggio_train_val = false;                       % Salva matrici contenenti training e validation set
-generalParameters.generalParameters.salvataggio_dataset_completo = false;               % Salva matrice contenente il dataset completo (già effettuato, pertanto disattivato)
+generalParameters.salvataggio_dataset_completo = false;               % Salva matrice contenente il dataset completo (già effettuato, pertanto disattivato)
+
+current_folder = pwd;
 
 %generalParameters.percorso_salvataggio_modelli = strcat("C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati_addestramento_dataAug","\",num2str(generalParameters.rapporto_training_validation)); % Percorso dove salvare i modelli
-generalParameters.percorso_salvataggio_train_val = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
-generalParameters.percorso_salvataggio_dataset_completo = "C:\Users\matte\Documents\GitHub\HandClassifier\Prepared_data_low_data";
+generalParameters.percorso_salvataggio_train_val = strcat(current_folder,"\Prepared_data_low_data");
+generalParameters.percorso_salvataggio_dataset_completo = strcat(current_folder,"\Prepared_data_low_data");
 
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames'); % Disabilita il warning relativo agli header
 
@@ -75,7 +77,8 @@ filterParameters.visualisation = "no";                               % Mostra gr
 trainParametersSVM.hypertuning = false;
 trainParametersSVM.useGPU = false;
 trainParametersSVM.maxTrainHours = 0.25;
-trainParametersSVM.t_hyper = templateSVM('KernelFunction', 'polynomial','PolynomialOrder', 3, 'KernelScale', 'auto');
+trainParametersSVM.t_hyper = templateSVM('KernelFunction', 'polynomial','PolynomialOrder', 3, ...
+                                         'KernelScale', 'auto');
 trainParametersSVM.opts_hyp = struct('AcquisitionFunctionName', 'expected-improvement-plus', ...
     'UseParallel', true, ...
     'MaxObjectiveEvaluations', 300, ... 
@@ -83,12 +86,13 @@ trainParametersSVM.opts_hyp = struct('AcquisitionFunctionName', 'expected-improv
     'ShowPlots', true, ...                                         
     'SaveIntermediateResults', true, ...                           
     'MaxTime', trainParametersSVM.maxTrainHours*3600);  
+
 trainParametersSVM.t_single = templateSVM('KernelFunction', 'rbf', 'KernelScale', 10, 'Solver', 'ISDA');
 trainParametersSVM.coding_single = 'onevsone';
 
 trainParametersSVM.saveAllModel = false;
 trainParametersSVM.savePath = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati\";
-trainParametersSVM.trainingRepetitions = 2;
+trainParametersSVM.trainingRepetitions = 1;
 
 trainParametersSVM.showCM = false;
 trainParametersSVM.showText = false;
@@ -101,16 +105,16 @@ trainParametersSVM.classes = {'Rilassata', 'Apertura','Chiusura'};
 
 %%  ========================Parametri addestramento NN =====================
 
-%trainParametersNN.rete_custom = false;                % Abilita l'utilzzo della rete neurale custom made
-trainParametersNN.savePath =  "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati\";
-trainParametersNN.trainingRepetitions = 2;
-trainParametersNN.showCM = false;
-trainParametersNN.showText = false;
-trainParametersNN.saveAllModel = false;
+%trainParametersPatternNet.rete_custom = false;                % Abilita l'utilzzo della rete neurale custom made
+trainParametersPatternNet.savePath =  "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati\";
+trainParametersPatternNet.trainingRepetitions = 1;
+trainParametersPatternNet.showCM = false;
+trainParametersPatternNet.showText = false;
+trainParametersPatternNet.saveAllModel = false;
 
-trainParametersNN.layer = [5 3];
+trainParametersPatternNet.layer = [5 3];
 
-trainParametersNN.trainFunction = 'trainscg';        % Funzione di training della rete neurale
+trainParametersPatternNet.trainFunction = 'trainscg';        % Funzione di training della rete neurale
         % Le funzioni di training possibili sono 
         % 'trainlm': Rapida discesa, risultati finali simili ma nel test perde complatamente l'aperatura
         % 'traingd': Discesa del gradiente estremamente lenta, prestazioni scadenti dopo 500 epoche
@@ -119,25 +123,25 @@ trainParametersNN.trainFunction = 'trainscg';        % Funzione di training dell
         % 'trainrp': Discesa del gradiente molto rapida e ottima velocità, da lavorarci meglio
         % 'trainscg': Criterio benchmark, da seguire come riferimento per il momento
 
-trainParametersNN.performanceFunction = 'crossentropy';
+trainParametersPatternNet.performanceFunction = 'crossentropy';
 
 
-trainParametersNN.neuronFunction = 'logsig'; % 'tansig', 'logsig', 'purelin', 'poslin', 'softmax'
+trainParametersPatternNet.neuronFunction = 'logsig'; % 'tansig', 'logsig', 'purelin', 'poslin', 'softmax'
         % 'tansig': 85.09% accuretezza processata, 59.43 peggiore (sensibilità 3)
         % 'logsig': 86.7% accuratezza processata, 62.77 peggiore (sensibilità 3)
         % 'purelin': 82.76% accuratezza processata, 55 peggiore (sensibilità 3)
         % 'poslin': 75.12% accuretezza processata, 45.7 peggiore (sensibilità 3)
         % 'softmax': no, peggiore
 
-trainParametersNN.outputLayerFunction = 'softmax';
+trainParametersPatternNet.outputLayerFunction = 'softmax';
 
-trainParametersNN.maxEpochs = 500;                   % Numero massimo di epoche di allenamento della rete neurale
-trainParametersNN.trainGoal = 0.000005;    % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
+trainParametersPatternNet.maxEpochs = 500;                   % Numero massimo di epoche di allenamento della rete neurale
+trainParametersPatternNet.trainGoal = 5e-6;    % Metrica della rete di allenamento considerata accettabile per interrompere l'allenamento
 
-trainParametersNN.maxFailure = 50;
+trainParametersPatternNet.maxFailure = 20;
       
-trainParametersNN.lr = 0.02;                          % Learning rate
-trainParametersNN.momentum = 0.9;                     % Momento durante l'allenamento
+trainParametersPatternNet.lr = 0.02;                          % Learning rate
+trainParametersPatternNet.momentum = 0.9;                     % Momento durante l'allenamento
 
 % Definizione del numero di neuroni per layer in base alla struttura
 % selezionata della rete
@@ -147,7 +151,7 @@ trainParametersNN.momentum = 0.9;                     % Momento durante l'allena
 
 
 %% ======================== Parametri addestramento LDA ====================
-trainParametersLDA.discriminant = 'quadratic';
+trainParametersLDA.discriminant = 'pseudolinear';
 %discrimType = 'quadratic'; % 'linear', 'quadratic', 'diaglinear', 'diagquadratic', 'pseudolinear','pseudoquadratic'
         % Le metriche qui sotto sono riferite al test set, senza postprocess. Accuratezza complessiva e poi metrica peggiore
         % 'linear': 75.22%, 48.64 sensibilità 3
@@ -159,7 +163,7 @@ trainParametersLDA.discriminant = 'quadratic';
 
 trainParametersLDA.saveAllModel = false;
 trainParametersLDA.savePath = "C:\Users\matte\Documents\GitHub\HandClassifier\Modelli_allenati";
-trainParametersLDA.trainingRepetitions = 2;
+trainParametersLDA.trainingRepetitions = 1;
 
 trainParametersLDA.showCM = false;
 trainParametersLDA.showText = false;
@@ -168,6 +172,15 @@ trainParametersLDA.classes = {'Rilassata', 'Apertura','Chiusura'};
 %% =========================================================================
 
 
+
+
+%% Parametri addestramento cosine similarity
+trainParametersCosineSimilarity.showCM = false;  
+trainParametersCosineSimilarity.showText = true;
+trainParametersCosineSimilarity.windowDuration = 250;
+trainParametersCosineSimilarity.windowOverlap = 0.5;
+trainParametersCosineSimilarity.usedValues = ['RMS', 'MNF'];
+trainParametersCosineSimilarity.isGTWindowed = false; 
 
 
 %% ================= Avvio pool se necessario e non attivo =================
@@ -184,7 +197,6 @@ end
 
 %% Import segnali 
 
-
 if generalParameters.dati_da_processare
     fprintf('\nInizio import e process dati \n')
     tic;
@@ -194,6 +206,7 @@ if generalParameters.dati_da_processare
     sig(:,1) = [];
     sig_aperture = table2array(sig);
     
+    clear sig
     
     % Import segnali chiusure
     sig = readtable(generalParameters.percorso_dati_aperture,"Delimiter", '\t');
@@ -270,9 +283,22 @@ if generalParameters.dati_da_processare
         ylabel('[uV]');
     end
     
+    envelope = sqrt(mean(envelope.^2, 2));
+
     % Standardizza i valori
-    
-    envelope_std = (envelope-mean(envelope))./std(envelope);
+    mu = mean(envelope);
+    sigma = std(envelope);
+    envelope_std = (envelope-mu)./sigma;
+
+    % Normalizza i valori
+    % Trova i valori minimi e massimi per ogni colonna (feature)
+    % minVals = min(envelope);
+    % maxVals = max(envelope);
+
+    % Esegui la normalizzazione min-max
+    % envelope_std = (envelope - minVals) ./ (maxVals - minVals);
+
+    %envelope_std = envelope;
     
     if generalParameters.mostra_segnale_per_canale
         figure;
@@ -351,6 +377,7 @@ if generalParameters.dati_da_processare
         xlabel('Campioni');
         ylabel('[a.u.]');
     end
+
     elapsed_time = toc;
     fprintf('   Termine import e process dati. Tempo necessario: %.2f secondi\n', elapsed_time);
 
@@ -358,7 +385,9 @@ else  % Caso di import diretto di dati e label già processati
     fprintf('\nInizio import dati \n')
     tic;
     envelope_std = load(generalParameters.percorso_dati_preprocessati);
+    envelope_std = envelope_std.envelope_std;
     label_dataset_completo = load(generalParameters.percorso_label_preprocessati);
+    label_dataset_completo = label_dataset_completo.label_trainC;
     elapsed_time = toc;
     fprintf('   Termine import dati. Tempo necessario: %.2f secondi\n', elapsed_time);
 end
@@ -414,6 +443,7 @@ if generalParameters.applica_data_augmentation
         hold on
         plot(augmentedLabels)
     end
+
     elapsed_time = toc;
     fprintf('   Termine Data augmentation. Tempo necessario: %.2f secondi\n', elapsed_time);
     % Assegna alla variabile i nomi previsti in seguito
@@ -449,6 +479,12 @@ sig_val = envelope_std(validation_idx,:);
 label_train = label_dataset_completo(training_idx,:);
 label_val = label_dataset_completo(validation_idx,:);
 
+% Standardizzazione valori basata solo sui valori di training
+mu = mean(sig_train);
+sigma = std(sig_train);
+sig_train = (sig_train-mu)./sigma;
+sig_val = (sig_val-mu)./sigma;
+
 % Salvataggio training e validation set
 if generalParameters.salvataggio_train_val
     mkdir(generalParameters.percorso_salvataggio_train_val); 
@@ -462,7 +498,7 @@ fprintf('   Termine Divisione training e validation set. Tempo necessario: %.2f 
 %% SVM - addestramento
 
 if generalParameters.allena_svm
-    [svm_models, best_svm_index,metrics_svm] = trainClassifier('svm',trainParametersSVM,sig_train,label_train,sig_val,label_val, generalParameters,filterParameters);
+    [svm_models, best_svm_index,metrics_svm] = trainClassifier('svm_multiclass',trainParametersSVM,sig_train,label_train,sig_val,label_val, generalParameters,filterParameters);
 end
 
 
@@ -475,7 +511,7 @@ end
 %% Rete neurale - addestramento
 
 if generalParameters.allena_rete_neurale
-    [nn_models, best_nn_index,metrics_nn] = trainClassifier('patternNet',trainParametersNN,sig_train,label_train,sig_val,label_val, generalParameters,filterParameters);
+    [nn_models, best_nn_index,metrics_nn] = trainClassifier('patternNet',trainParametersPatternNet,sig_train,label_train,sig_val,label_val, generalParameters,filterParameters);
 end
     
     
